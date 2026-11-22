@@ -36,7 +36,7 @@ CI runs the same command on isolated, temporary SQLite files. Tests cover the or
 
 ## Submission status
 
-The student accepted the local SQLite candidate v1.0.0-rc.2 on 22 November 2026 after checking customer order visibility and staff handover attribution. The selected deployment platform is Streamlit. The final application URL and remote verification are pending.
+The student accepted the local SQLite candidate v1.0.0-rc.2 on 22 November 2026 after checking customer order visibility and staff handover attribution. The SQLite demo is [live on Streamlit Community Cloud](https://cp5401-orderflow.streamlit.app/). On 22 November 2026 an independent visitor session opened the customer order form without signing in.
 
 ## Project records
 
