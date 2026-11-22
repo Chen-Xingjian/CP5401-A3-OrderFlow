@@ -120,3 +120,8 @@ def advance(db: Connection, order_id: UUID, target: str) -> Order:
         .one()
     )
     return Order(**row)
+
+
+def available_services(db: Connection) -> dict[str, str]:
+    rows = db.execute(text("SELECT id, name FROM service_catalogue WHERE active ORDER BY name"))
+    return {row.id: row.name for row in rows}

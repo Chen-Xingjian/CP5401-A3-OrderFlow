@@ -1,4 +1,4 @@
-"""Server-side order operations. R3 will supply the authenticated principal."""
+"""Order operations for authenticated customers and staff."""
 
 from uuid import UUID
 
@@ -30,6 +30,15 @@ def _require_role(actual: str, required: str) -> None:
 class OrderService:
     def __init__(self, engine: Engine):
         self.engine = engine
+
+    def account_role(self, principal: Principal) -> str:
+        with transaction(self.engine) as db:
+            return _role(db, principal)
+
+    def available_services(self, principal: Principal) -> dict[str, str]:
+        with transaction(self.engine) as db:
+            _require_role(_role(db, principal), "CUSTOMER")
+            return repository.available_services(db)
 
     def create_order(
         self, principal: Principal | None, *, service_id: str, quantity: int, note: str = ""

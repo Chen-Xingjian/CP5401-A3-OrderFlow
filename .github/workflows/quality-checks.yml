@@ -1,4 +1,4 @@
-name: OrderFlow core checks
+name: OrderFlow quality checks
 on:
   pull_request:
     branches: [main]

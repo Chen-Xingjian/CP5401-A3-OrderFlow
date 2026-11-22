@@ -1,8 +1,10 @@
 .git
 .venv
 .env
-.streamlit
+.streamlit/secrets.toml
 **/__pycache__
 .pytest_cache
 .ruff_cache
 reports
+
+.local-review

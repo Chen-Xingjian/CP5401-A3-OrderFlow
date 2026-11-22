@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .models import OrderError
 
-MIGRATION = Path(__file__).resolve().parents[2] / "db/migrations/001_baseline.sql"
+MIGRATIONS = Path(__file__).resolve().parents[2] / "db/migrations"
 
 
 def open_engine(url: str, **options) -> Engine:
@@ -40,26 +40,27 @@ def transaction(engine: Engine):
 
 
 def migrate(engine: Engine) -> None:
-    sql = MIGRATION.read_bytes()
-    digest = hashlib.sha256(sql).hexdigest()
     with engine.begin() as connection:
         connection.execute(text("SELECT pg_advisory_xact_lock(5401, 1)"))
         connection.exec_driver_sql(
             "CREATE TABLE IF NOT EXISTS schema_migrations "
             "(name text PRIMARY KEY, sha256 text NOT NULL)"
         )
-        applied = connection.execute(
-            text("SELECT sha256 FROM schema_migrations WHERE name = :name"),
-            {"name": MIGRATION.name},
-        ).scalar_one_or_none()
-        if applied is None:
-            connection.exec_driver_sql(sql.decode("utf-8"))
-            connection.execute(
-                text("INSERT INTO schema_migrations VALUES (:name, :digest)"),
-                {"name": MIGRATION.name, "digest": digest},
-            )
-        elif applied != digest:
-            raise RuntimeError("The installed baseline differs from the migration file.")
+        for migration in sorted(MIGRATIONS.glob("*.sql")):
+            sql = migration.read_bytes()
+            digest = hashlib.sha256(sql).hexdigest()
+            applied = connection.execute(
+                text("SELECT sha256 FROM schema_migrations WHERE name = :name"),
+                {"name": migration.name},
+            ).scalar_one_or_none()
+            if applied is None:
+                connection.exec_driver_sql(sql.decode("utf-8"))
+                connection.execute(
+                    text("INSERT INTO schema_migrations VALUES (:name, :digest)"),
+                    {"name": migration.name, "digest": digest},
+                )
+            elif applied != digest:
+                raise RuntimeError("An installed migration differs from its source file.")
 
 
 if __name__ == "__main__":

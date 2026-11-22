@@ -1,0 +1,759 @@
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -1,8 +1,10 @@
+ .git
+ .venv
+ .env
+-.streamlit
++.streamlit/secrets.toml
+ **/__pycache__
+ .pytest_cache
+ .ruff_cache
+ reports
++
++.local-review
+--- a/.github/workflows/quality-checks.yml
++++ b/.github/workflows/quality-checks.yml
+@@ -1,4 +1,4 @@
+-name: OrderFlow core checks
++name: OrderFlow quality checks
+ on:
+   pull_request:
+     branches: [main]
+--- a/.gitignore
++++ b/.gitignore
+@@ -6,3 +6,5 @@
+ .ruff_cache/
+ reports/
+ .DS_Store
++
++.local-review/
+--- /dev/null
++++ b/.streamlit/config.toml
+@@ -0,0 +1,9 @@
++[theme]
++primaryColor = "#11615D"
++backgroundColor = "#FBFAF6"
++secondaryBackgroundColor = "#EEEFE9"
++textColor = "#162C32"
++base = "light"
++
++[browser]
++gatherUsageStats = false
+--- a/README.md
++++ b/README.md
+@@ -1,66 +1,38 @@
+ # OrderFlow
+ 
+-A campus print-shop customer orders a single catalogue service and follows its progress through collection. Staff confirm an order, start work, mark it ready for pickup and record handover. This repository contains the order service and PostgreSQL baseline for development round R2.
++OrderFlow tracks campus print orders through pickup. Customers order one print service and follow its progress. Staff see the shop queue, record production and confirm physical handover. R2-01 was accepted on 22 November 2026. The English Streamlit interface in R3-01 awaits student review.
+ 
+-**Review state** — The student accepted R1-01 on 17 November 2026. Candidate R2-01 awaits student acceptance. The two roles in the examples below are fictional fixtures. The interactive Python session is a local acceptance tool with direct access to the service. The authenticated Streamlit application belongs to R3.
++## Run the local review application
+ 
+-## Run the checks
+-
+-With Docker Compose, from the repository root, run:
+-
+-```sh
+-docker compose run --build --rm checks
+-```
+-
+-For a native run, use Python 3.12 and PostgreSQL 16. With `initdb`, `pg_ctl` and `createdb` on PATH:
++Use Python 3.12 and PostgreSQL 16 with initdb, pg_ctl, psql and createdb on PATH. From the project root:
+ 
+ ```sh
+ python3.12 -m venv .venv
+ . .venv/bin/activate
++python -m pip install -r requirements.txt
++sh scripts/review-app.sh
++```
++
++Open http://127.0.0.1:8513. The launcher creates a private, local PostgreSQL cluster, applies the migrations and provisions alex and blair (customers) and sam (staff) on first use. Find their generated passwords in `.local-review/accounts.txt`. This private file and the database are excluded from version control and distribution. The database stores salted scrypt verifiers. Sign out before switching accounts in the same browser. Reuse the launcher to reopen the same local shop.
++
++Stop the app with Ctrl-C. To stop its local database, run `pg_ctl -D .local-review/data -m fast -w stop`. For a separate configured environment, supply DATABASE_URL, run `PYTHONPATH=src python -m orderflow.db` and launch `python -m streamlit run src/app.py`. Fictional review accounts are provisioned only by the explicit local review setup.
++
++## Review an order
++
++Sign in as a customer and select **Place an order**. Staff open the matching ID in **Shop queue**, then confirm, start production and mark it ready for pickup. Customers use **Refresh orders** to see updates. Once the customer has received the prints, staff select **Confirm handover**. The history records who performed each step and when, in Singapore time.
++
++## Run the checks
++
++```sh
+ python -m pip install -r requirements-dev.txt
+ sh scripts/local-pg.sh sh scripts/check.sh
+ ```
+ 
+-The native helper starts a private socket-only server, creates the disposable test database and stops the server on exit. An existing dedicated database named `orderflow_test` also works. Set `TEST_DATABASE_URL` and run `sh scripts/check.sh`. Each integration case has its own schema. The quality workflow calls the same check script on pull requests targeting main and pushes to main. Results appear in the run log and its JUnit artifact.
++Alternatively run `docker compose run --build --rm checks`. CI invokes the same check script against its own PostgreSQL service. Tests create isolated schemas. The UI suite exercises sign-in, account switching, account deactivation, stale staff actions and the handover flow using the real service and database.
+ 
+-## Try the core by hand
++## Project records
+ 
+-Launch the review shell using one of the following commands. Both start with empty orders and fictional accounts.
+-
+-```sh
+-docker compose run --build --rm -e PYTHONPATH=src checks python -m support.review
+-# With the native environment above:
+-sh scripts/local-pg.sh env PYTHONPATH=src python -m support.review
+-```
+-
+-Enter one line at a time at the Python prompt:
+-
+-```python
+-order = service.create_order(a, service_id="bw-print", quantity=2)
+-order.status, order.version, len(service.get_order(a, order.id).history)
+-service.list_orders(b)
+-service.get_order(b, order.id)
+-service.advance_order(staff, order.id, target="COMPLETED", expected_version=0)
+-service.get_order(a, order.id)
+-service.advance_order(staff, order.id, target="CONFIRMED", expected_version=0)
+-service.advance_order(staff, order.id, target="CONFIRMED", expected_version=0)
+-[(e.sequence, e.to_status, e.actor_id) for e in service.get_order(a, order.id).history]
+-```
+-
+-Expect `('PENDING', 0, 1)`, then an empty customer B list. B's detail lookup reports “No accessible order was found.” The premature handover is refused. Re-reading the detail shows the original order with one event. Staff confirmation succeeds once. Replaying version zero reports “This order changed. Refresh before continuing.” The last expression yields two events, from customer A and staff S. Exceptions leave the shell open. Press Ctrl-D to exit and discard this shop.
+-
+-## Database and source
+-
+-| Path | Purpose |
+-|---|---|
+-| `src/orderflow/services.py` | Four service calls, live role checks, per-call transactions and version comparison |
+-| `src/orderflow/rules.py` | Input boundaries and four legal forward transitions |
+-| `src/orderflow/repository.py` | Scoped queries, row lock, order write and history append |
+-| `db/migrations/001_baseline.sql` | User identities, catalogue, orders, history and three fictional catalogue rows |
+-| `src/orderflow/db.py` | Connection setup, UTC transaction scope and checksummed migration |
+-| `tests/integration/test_transactions.py` | History and commit faults, two-connection contention |
+-| `docs/evidence/R2-01/` | Local run, machine-readable results, negative control and candidate file hashes |
+-
+-To initialise a separate development database, supply its PostgreSQL URL as `DATABASE_URL` and run `PYTHONPATH=src python -m orderflow.db` from the repository root. The migration runs in a transaction and checks its previous checksum before reapplying. It seeds the catalogue. Test identities are created only in the isolated acceptance schemas. Server-side login and credentials are part of the R3 design.
+-
+-See the [requirements](docs/requirements.md), [test map](docs/test-plan.md), [R1 decision](docs/iterations/R1-01-decision.md) and [R2 acceptance report](docs/iterations/R2-01.md).
++- [Approved requirements](docs/requirements.md)
++- [R2 acceptance decision](docs/iterations/R2-01-decision.md)
++- [R3 implementation and student review](docs/iterations/R3-01.md)
++- [Test map](docs/test-plan.md)
+--- /dev/null
++++ b/db/migrations/002_account_passwords.sql
+@@ -0,0 +1,5 @@
++CREATE TABLE account_passwords (
++    user_id text PRIMARY KEY REFERENCES users(id),
++    salt bytea NOT NULL CHECK (octet_length(salt) = 16),
++    digest bytea NOT NULL CHECK (octet_length(digest) = 32)
++);
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -2,3 +2,40 @@
+ psycopg[binary]==3.3.9
+ typing_extensions==4.16.0
+ greenlet==3.2.4 ; platform_machine == "x86_64" or platform_machine == "AMD64" or platform_machine == "aarch64"
++
++# Streamlit interface and its runtime dependencies (Python 3.12).
++altair==6.3.0
++attrs==26.1.0
++blinker==1.9.0
++cachetools==7.3.3
++certifi==2026.11.20
++charset-normalizer==3.5.2
++click==8.5.1
++gitdb==4.0.12
++gitpython==3.2.1
++idna==3.20
++jinja2==3.1.6
++jsonschema==4.26.0
++jsonschema-specifications==2025.9.1
++markupsafe==3.0.4
++narwhals==2.29.0
++numpy==2.5.5
++packaging==26.3
++pandas==2.3.3
++pillow==12.3.0
++protobuf==6.33.6
++pyarrow==26.0.1
++pydeck==0.9.3
++python-dateutil==4.0.0
++pytz==2026.6
++referencing==0.37.0
++requests==2.34.2
++rpds-py==2026.9.1
++smmap==5.0.3
++streamlit==1.55.0
++tenacity==9.2.1
++toml==0.10.2
++tornado==6.6.1
++tzdata==2026.6
++urllib3==2.8.0
++watchdog==6.0.0 ; platform_system != "Darwin"
+--- /dev/null
++++ b/scripts/review-app.sh
+@@ -0,0 +1,31 @@
++#!/bin/sh
++# Run the local review shop. Its data and generated credentials survive a restart.
++set -eu
++umask 077
++cd "$(dirname "$0")/.."
++state="$PWD/.local-review"
++mkdir -p "$state"
++for binary in initdb pg_ctl createdb psql; do
++    command -v "$binary" >/dev/null || { echo "Add PostgreSQL 16 tools to PATH." >&2; exit 2; }
++done
++if [ ! -f "$state/data/PG_VERSION" ]; then
++    initdb -D "$state/data" -U orderflow --auth-local=trust --auth-host=reject \
++        --no-locale --encoding=UTF8 > "$state/init.log"
++fi
++if ! pg_ctl -D "$state/data" status >/dev/null 2>&1; then
++    pg_ctl -D "$state/data" -l "$state/postgres.log" -w \
++        -o "-c listen_addresses='' -c unix_socket_directories='$state' -c timezone=UTC" start >/dev/null
++fi
++if [ "$(psql -h "$state" -U orderflow -d postgres -Atc "SELECT count(*) FROM pg_database WHERE datname='orderflow_review'")" = 0 ]; then
++    createdb -h "$state" -U orderflow orderflow_review
++fi
++export DATABASE_URL="postgresql+psycopg://orderflow@/orderflow_review?host=$state"
++export PYTHONPATH=src
++python -m orderflow.db
++if [ ! -s "$state/accounts.txt" ]; then
++    python -m support.provision > "$state/accounts.tmp"
++    mv "$state/accounts.tmp" "$state/accounts.txt"
++fi
++echo "Review account credentials: $state/accounts.txt"
++exec python -m streamlit run src/app.py --server.address 127.0.0.1 \
++    --server.port "${ORDERFLOW_PORT:-8513}" --server.headless true
+--- /dev/null
++++ b/src/app.py
+@@ -0,0 +1,209 @@
++"""Streamlit entry point for the OrderFlow campus print shop."""
++
++import os
++from zoneinfo import ZoneInfo
++
++import streamlit as st
++from sqlalchemy.exc import ArgumentError
++
++from orderflow.auth import authenticate
++from orderflow.db import open_engine
++from orderflow.models import OrderError
++from orderflow.rules import NEXT_STATUS
++from orderflow.services import OrderService
++
++LABELS = {
++    "PENDING": "Pending confirmation",
++    "CONFIRMED": "Confirmed",
++    "PROCESSING": "In production",
++    "READY_FOR_PICKUP": "Ready for pickup",
++    "COMPLETED": "Completed",
++}
++ACTIONS = {
++    "PENDING": "Confirm order",
++    "CONFIRMED": "Start production",
++    "PROCESSING": "Mark ready for pickup",
++    "READY_FOR_PICKUP": "Confirm handover",
++}
++INSTRUCTIONS = {
++    "PENDING": "The print shop has received your order.",
++    "CONFIRMED": "The shop has accepted this order for production.",
++    "PROCESSING": "Printing is in progress. Please wait for the pickup update.",
++    "READY_FOR_PICKUP": "Your prints are ready. Collect them at the print counter.",
++    "COMPLETED": "The shop has recorded the handover to the customer.",
++}
++SG = ZoneInfo("Asia/Singapore")
++
++
++@st.cache_resource
++def connect(url):
++    return open_engine(url, pool_pre_ping=True)
++
++
++def clear_session():
++    for key in list(st.session_state):
++        del st.session_state[key]
++
++
++def show_error(error):
++    if error.code == "UNAUTHENTICATED":
++        clear_session()
++    st.session_state["feedback"] = ("error", str(error))
++
++
++def sign_in(engine):
++    name = st.session_state["login_name"]
++    password = st.session_state.pop("login_password", "")
++    try:
++        actor = authenticate(engine, name, password)
++    except OrderError as error:
++        show_error(error)
++        return
++    clear_session()
++    st.session_state["actor"] = actor
++
++
++def new_order(service):
++    try:
++        order = service.create_order(
++            st.session_state.actor,
++            service_id=st.session_state.item,
++            quantity=st.session_state.copies,
++            note=st.session_state.note,
++        )
++    except OrderError as error:
++        show_error(error)
++        return
++    st.session_state["chosen"] = str(order.id)
++    st.session_state["page"] = "My orders"
++    st.session_state["feedback"] = ("success", "Order placed.")
++
++
++def advance(service, order_id, stage, version):
++    # These values belong to the page that supplied the clicked button.
++    try:
++        updated = service.advance_order(
++            st.session_state.get("actor"),
++            order_id,
++            target=NEXT_STATUS[stage],
++            expected_version=version,
++        )
++    except OrderError as error:
++        show_error(error)
++        return
++    st.session_state["feedback"] = (
++        "success",
++        f"Order updated to {LABELS[updated.status].lower()}.",
++    )
++
++
++def order_form(service, actor):
++    st.header("Place an order")
++    options = service.available_services(actor)
++    if not options:
++        st.info("The shop has no services available.")
++        return
++    with st.form("new_order"):
++        st.selectbox("Print service", list(options), format_func=options.get, key="item")
++        st.number_input("Quantity", min_value=1, max_value=99, step=1, key="copies")
++        st.text_area("Print notes (optional)", max_chars=500, key="note")
++        st.form_submit_button("Place order", on_click=new_order, args=(service,), type="primary")
++
++
++def order_list(service, actor, staff):
++    st.header("Shop queue" if staff else "My orders")
++    orders = service.list_orders(actor)
++    if not orders:
++        st.info(
++            "The queue is empty." if staff else "Your orders will appear here after you place one."
++        )
++        return
++    choices = {str(o.id): o for o in orders}
++
++    def label(value):
++        o = choices[value]
++        return f"{str(o.id)[:8].upper()} · {o.service_name_snapshot} · {LABELS[o.status]}"
++
++    if st.session_state.get("chosen") not in choices:
++        st.session_state["chosen"] = next(iter(choices))
++    selection = st.selectbox("Select order", list(choices), format_func=label, key="chosen")
++    detail = service.get_order(actor, choices[selection].id)
++    o = detail.order
++    with st.container(border=True):
++        st.subheader(LABELS[o.status])
++        st.write(INSTRUCTIONS[o.status])
++        first, second = st.columns([3, 1])
++        first.metric("Print service", o.service_name_snapshot)
++        second.metric("Quantity", o.quantity)
++        st.caption(f"Order ID · {o.id}")
++        if staff:
++            st.caption(f"Customer · {o.owner_id}")
++        if o.note:
++            st.markdown("**Print notes**")
++            st.text(o.note)
++        if staff and o.status in NEXT_STATUS:
++            if o.status == "READY_FOR_PICKUP":
++                st.write("Confirm only after you have handed the prints to the customer.")
++            st.button(
++                ACTIONS[o.status],
++                type="primary",
++                key=f"advance_{o.id}_{o.version}",
++                on_click=advance,
++                args=(service, o.id, o.status, o.version),
++            )
++    st.subheader("Order history")
++    for item in reversed(detail.history):
++        source = LABELS[item.from_status] if item.from_status else "Order created"
++        st.write(f"{source} → {LABELS[item.to_status]}")
++        st.caption(f"{item.occurred_at.astimezone(SG):%d %b %Y, %H:%M} SGT · {item.actor_id}")
++
++
++def main():
++    st.set_page_config(page_title="OrderFlow · Campus print shop", page_icon="📄")
++    st.title("OrderFlow")
++    st.caption("Campus print shop")
++    url = os.getenv("DATABASE_URL")
++    if not url:
++        st.error("OrderFlow needs a configured database connection.")
++        return
++    try:
++        service = OrderService(connect(url))
++    except (ValueError, ArgumentError):
++        st.error("Check the database connection configuration.")
++        return
++    if feedback := st.session_state.pop("feedback", None):
++        kind, message = feedback
++        (st.success if kind == "success" else st.error)(message)
++    actor = st.session_state.get("actor")
++    if actor is None:
++        st.header("Sign in")
++        with st.form("login"):
++            st.text_input("Username", key="login_name")
++            st.text_input("Password", type="password", key="login_password")
++            st.form_submit_button(
++                "Sign in", type="primary", on_click=sign_in, args=(service.engine,)
++            )
++        return
++    try:
++        role = service.account_role(actor)
++        staff = role == "STAFF"
++        st.sidebar.subheader("Account")
++        st.sidebar.write(f"{actor.user_id} · {'Staff' if staff else 'Customer'}")
++        st.sidebar.button("Refresh orders")
++        st.sidebar.button("Sign out", on_click=clear_session)
++        if not staff:
++            page = st.radio(
++                "Workspace", ["My orders", "Place an order"], horizontal=True, key="page"
++            )
++            if page == "Place an order":
++                order_form(service, actor)
++                return
++        order_list(service, actor, staff)
++    except OrderError as error:
++        if error.code == "UNAUTHENTICATED":
++            show_error(error)
++            st.rerun()
++        st.error(str(error))
++
++
++main()
+--- /dev/null
++++ b/src/orderflow/auth.py
+@@ -0,0 +1,46 @@
++"""Authenticate pre-provisioned users against salted scrypt password verifiers."""
++
++import hashlib
++import hmac
++import secrets
++
++from sqlalchemy import text
++from sqlalchemy.engine import Engine
++
++from .db import transaction
++from .models import OrderError, Principal
++
++
++def _digest(password: str, salt: bytes) -> bytes:
++    return hashlib.scrypt(
++        password.encode(), salt=salt, n=2**15, r=8, p=3, dklen=32, maxmem=64 << 20
++    )
++
++
++def password_record(password: str) -> dict:
++    salt = secrets.token_bytes(16)
++    return {"salt": salt, "digest": _digest(password, salt)}
++
++
++def authenticate(engine: Engine, username: str, password: str) -> Principal:
++    denied = OrderError("INVALID_CREDENTIALS", "Check your username and password.")
++    if (
++        not username
++        or len(username) > 100
++        or not password
++        or len(password) > 256
++        or "\x00" in username
++    ):
++        raise denied
++    with transaction(engine) as db:
++        row = db.execute(
++            text("""
++            SELECT u.id, p.salt, p.digest FROM users u JOIN account_passwords p ON p.user_id = u.id
++            WHERE u.username = :name AND u.active
++        """),
++            {"name": username.strip()},
++        ).one_or_none()
++    candidate = _digest(password, bytes(row.salt) if row else bytes(16))
++    if row is None or not hmac.compare_digest(candidate, bytes(row.digest)):
++        raise denied
++    return Principal(row.id)
+--- a/src/orderflow/db.py
++++ b/src/orderflow/db.py
+@@ -11,7 +11,7 @@
+ 
+ from .models import OrderError
+ 
+-MIGRATION = Path(__file__).resolve().parents[2] / "db/migrations/001_baseline.sql"
++MIGRATIONS = Path(__file__).resolve().parents[2] / "db/migrations"
+ 
+ 
+ def open_engine(url: str, **options) -> Engine:
+@@ -40,26 +40,27 @@
+ 
+ 
+ def migrate(engine: Engine) -> None:
+-    sql = MIGRATION.read_bytes()
+-    digest = hashlib.sha256(sql).hexdigest()
+     with engine.begin() as connection:
+         connection.execute(text("SELECT pg_advisory_xact_lock(5401, 1)"))
+         connection.exec_driver_sql(
+             "CREATE TABLE IF NOT EXISTS schema_migrations "
+             "(name text PRIMARY KEY, sha256 text NOT NULL)"
+         )
+-        applied = connection.execute(
+-            text("SELECT sha256 FROM schema_migrations WHERE name = :name"),
+-            {"name": MIGRATION.name},
+-        ).scalar_one_or_none()
+-        if applied is None:
+-            connection.exec_driver_sql(sql.decode("utf-8"))
+-            connection.execute(
+-                text("INSERT INTO schema_migrations VALUES (:name, :digest)"),
+-                {"name": MIGRATION.name, "digest": digest},
+-            )
+-        elif applied != digest:
+-            raise RuntimeError("The installed baseline differs from the migration file.")
++        for migration in sorted(MIGRATIONS.glob("*.sql")):
++            sql = migration.read_bytes()
++            digest = hashlib.sha256(sql).hexdigest()
++            applied = connection.execute(
++                text("SELECT sha256 FROM schema_migrations WHERE name = :name"),
++                {"name": migration.name},
++            ).scalar_one_or_none()
++            if applied is None:
++                connection.exec_driver_sql(sql.decode("utf-8"))
++                connection.execute(
++                    text("INSERT INTO schema_migrations VALUES (:name, :digest)"),
++                    {"name": migration.name, "digest": digest},
++                )
++            elif applied != digest:
++                raise RuntimeError("An installed migration differs from its source file.")
+ 
+ 
+ if __name__ == "__main__":
+--- a/src/orderflow/repository.py
++++ b/src/orderflow/repository.py
+@@ -120,3 +120,8 @@
+         .one()
+     )
+     return Order(**row)
++
++
++def available_services(db: Connection) -> dict[str, str]:
++    rows = db.execute(text("SELECT id, name FROM service_catalogue WHERE active ORDER BY name"))
++    return {row.id: row.name for row in rows}
+--- a/src/orderflow/services.py
++++ b/src/orderflow/services.py
+@@ -1,4 +1,4 @@
+-"""Server-side order operations. R3 will supply the authenticated principal."""
++"""Order operations for authenticated customers and staff."""
+ 
+ from uuid import UUID
+ 
+@@ -30,6 +30,15 @@
+ class OrderService:
+     def __init__(self, engine: Engine):
+         self.engine = engine
++
++    def account_role(self, principal: Principal) -> str:
++        with transaction(self.engine) as db:
++            return _role(db, principal)
++
++    def available_services(self, principal: Principal) -> dict[str, str]:
++        with transaction(self.engine) as db:
++            _require_role(_role(db, principal), "CUSTOMER")
++            return repository.available_services(db)
+ 
+     def create_order(
+         self, principal: Principal | None, *, service_id: str, quantity: int, note: str = ""
+--- /dev/null
++++ b/support/provision.py
+@@ -0,0 +1,41 @@
++"""Create fictional review accounts once in an explicit local review database."""
++
++import os
++import secrets
++
++from sqlalchemy import text
++
++from orderflow.auth import password_record
++from orderflow.db import migrate, open_engine
++
++ACCOUNTS = [
++    ("customer-a", "alex", "CUSTOMER"),
++    ("customer-b", "blair", "CUSTOMER"),
++    ("staff-s", "sam", "STAFF"),
++]
++
++
++def main():
++    engine = open_engine(os.environ["DATABASE_URL"])
++    if engine.url.database != "orderflow_review":
++        raise SystemExit("Choose the dedicated orderflow_review database.")
++    migrate(engine)
++    credentials = []
++    with engine.begin() as db:
++        for user_id, name, role in ACCOUNTS:
++            password = secrets.token_urlsafe(12)
++            db.execute(
++                text("INSERT INTO users (id,username,role) VALUES (:id,:name,:role)"),
++                {"id": user_id, "name": name, "role": role},
++            )
++            db.execute(
++                text("INSERT INTO account_passwords VALUES (:id,:salt,:digest)"),
++                {"id": user_id, **password_record(password)},
++            )
++            credentials.append((name, role, password))
++    for name, role, password in credentials:
++        print(f"{name} ({role}): {password}")
++
++
++if __name__ == "__main__":
++    main()
+--- a/tests/integration/test_orders.py
++++ b/tests/integration/test_orders.py
+@@ -227,7 +227,9 @@
+     migrate(database)
+     assert OrderService(database).get_order(A, order.id) == expected
+     with database.connect() as db:
+-        assert db.exec_driver_sql("SELECT count(*) FROM schema_migrations").scalar_one() == 1
++        assert db.exec_driver_sql(
++            "SELECT name FROM schema_migrations ORDER BY name"
++        ).scalars().all() == ["001_baseline.sql", "002_account_passwords.sql"]
+ 
+ 
+ def test_invalid_reference_and_version_preserve_order(service):
+--- /dev/null
++++ b/tests/integration/test_ui.py
+@@ -0,0 +1,130 @@
++from pathlib import Path
++
++import pytest
++from sqlalchemy import text
++from streamlit.testing.v1 import AppTest
++
++from orderflow.auth import authenticate, password_record
++from orderflow.models import OrderError, Principal
++
++APP = Path(__file__).resolve().parents[2] / "src/app.py"
++PASSWORD = "fictional-test-password"
++
++
++@pytest.fixture
++def review_shop(database, monkeypatch):
++    with database.begin() as db:
++        schema = db.exec_driver_sql("SELECT current_schema()").scalar_one()
++        db.execute(
++            text("INSERT INTO account_passwords VALUES (:id,:salt,:digest)"),
++            [
++                {"id": uid, **password_record(PASSWORD)}
++                for uid in ["customer-a", "customer-b", "staff-s"]
++            ],
++        )
++    url = database.url.update_query_dict({"options": f"-c search_path={schema}"})
++    monkeypatch.setenv("DATABASE_URL", url.render_as_string(hide_password=False))
++    return database
++
++
++def button(app, label):
++    return next(item for item in app.button if item.label == label)
++
++
++def login(app, username, password=PASSWORD):
++    app.text_input(key="login_name").set_value(username)
++    app.text_input(key="login_password").set_value(password)
++    button(app, "Sign in").click().run()
++    assert not app.exception
++
++
++def start(username):
++    app = AppTest.from_file(str(APP), default_timeout=15).run()
++    login(app, username)
++    return app
++
++
++def test_t20_customer_order_and_shared_browser_switch(review_shop):
++    app = start("alex")
++    app.radio(key="page").set_value("Place an order").run()
++    app.number_input(key="copies").set_value(2)
++    app.text_area(key="note").set_value("Collect on Friday")
++    button(app, "Place order").click().run()
++    assert not app.exception
++    assert app.success[0].value == "Order placed."
++    assert app.text[0].value == "Collect on Friday"
++    assert app.subheader[0].value == "Pending confirmation"
++    assert all(item.label != "Confirm order" for item in app.button)
++    button(app, "Sign out").click().run()
++    assert not app.selectbox
++    login(app, "blair")
++    assert not app.text
++    assert not app.selectbox
++    assert app.info[0].value.startswith("Your orders will appear here")
++
++
++def test_t20_two_staff_sessions_and_handover(review_shop, service):
++    customer = Principal("customer-a")
++    order = service.create_order(customer, service_id="bw-print", quantity=2)
++    first, second = start("sam"), start("sam")
++    button(first, "Confirm order").click().run()
++    button(second, "Confirm order").click().run()
++    assert not second.exception
++    assert "Refresh" in second.error[0].value
++    assert service.get_order(customer, order.id).order.version == 1
++    for label in ["Start production", "Mark ready for pickup"]:
++        button(first, label).click().run()
++    owner = start("alex")
++    assert owner.subheader[0].value == "Ready for pickup"
++    assert any("Collect them" in m.value for m in owner.markdown)
++    assert all(item.label != "Confirm handover" for item in owner.button)
++    button(first, "Confirm handover").click().run()
++    button(owner, "Refresh orders").click().run()
++    assert owner.subheader[0].value == "Completed"
++    assert all(item.label != "Confirm handover" for item in first.button)
++    assert len(service.get_order(customer, order.id).history) == 5
++
++
++def test_t20_invalid_login_and_disabled_session(review_shop):
++    app = AppTest.from_file(str(APP), default_timeout=15).run()
++    for username in ["sam", "unknown"]:
++        login(app, username, "incorrect")
++        assert app.error[0].value == "Check your username and password."
++        assert not app.selectbox
++    login(app, "sam")
++    with review_shop.begin() as db:
++        db.execute(text("UPDATE users SET active=false WHERE id='staff-s'"))
++    button(app, "Refresh orders").click().run()
++    assert app.text_input(key="login_name")
++    assert not app.selectbox
++    with pytest.raises(OrderError) as error:
++        authenticate(review_shop, "sam", PASSWORD)
++    assert error.value.code == "INVALID_CREDENTIALS"
++
++
++def test_upgrade_r2_order_with_history(tmp_path, monkeypatch):
++    from orderflow import db
++    from orderflow.services import OrderService
++    from support.sandbox import sandbox_database
++
++    migrations = db.MIGRATIONS
++    baseline = migrations / "001_baseline.sql"
++    (tmp_path / baseline.name).write_bytes(baseline.read_bytes())
++    with monkeypatch.context() as patch:
++        patch.setattr(db, "MIGRATIONS", tmp_path)
++        with sandbox_database() as legacy:
++            svc = OrderService(legacy)
++            owner = Principal("customer-a")
++            order = svc.create_order(owner, service_id="bw-print", quantity=2)
++            svc.advance_order(
++                Principal("staff-s"), order.id, target="CONFIRMED", expected_version=0
++            )
++            snapshot = svc.get_order(owner, order.id)
++            patch.setattr(db, "MIGRATIONS", migrations)
++            db.migrate(legacy)
++            with legacy.begin() as connection:
++                connection.execute(
++                    text("INSERT INTO account_passwords VALUES ('customer-a',:salt,:digest)"),
++                    password_record(PASSWORD),
++                )
++            assert svc.get_order(authenticate(legacy, "alex", PASSWORD), order.id) == snapshot

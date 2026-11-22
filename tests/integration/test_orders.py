@@ -227,7 +227,9 @@ def test_t19_reopen_database_and_rerun_migration(service, database):
     migrate(database)
     assert OrderService(database).get_order(A, order.id) == expected
     with database.connect() as db:
-        assert db.exec_driver_sql("SELECT count(*) FROM schema_migrations").scalar_one() == 1
+        assert db.exec_driver_sql(
+            "SELECT name FROM schema_migrations ORDER BY name"
+        ).scalars().all() == ["001_baseline.sql", "002_account_passwords.sql"]
 
 
 def test_invalid_reference_and_version_preserve_order(service):
