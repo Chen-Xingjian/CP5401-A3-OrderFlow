@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from .models import OrderError
@@ -10,6 +11,10 @@ NEXT_STATUS = {
     "PROCESSING": "READY_FOR_PICKUP",
     "READY_FOR_PICKUP": "COMPLETED",
 }
+
+
+def pickup_is_overdue(ready_at: datetime, as_of: datetime) -> bool:
+    return as_of.astimezone(UTC) - ready_at.astimezone(UTC) >= timedelta(hours=48)
 
 
 def validate_text(value: object, label: str) -> None:

@@ -1,5 +1,6 @@
 """Order operations for authenticated customers and staff."""
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.engine import Connection, Engine
@@ -61,6 +62,19 @@ class OrderService:
         with transaction(self.engine) as db:
             role = _role(db, principal)
             return repository.list_visible(db, principal.user_id if role == "CUSTOMER" else None)
+
+    def staff_queue(
+        self, principal: Principal | None, *, as_of: datetime
+    ) -> tuple[list[Order], set[UUID]]:
+        with transaction(self.engine) as db:
+            _require_role(_role(db, principal), "STAFF")
+            orders = repository.list_visible(db, None)
+            overdue = {
+                order_id
+                for order_id, ready_at in repository.ready_pickup_times(db).items()
+                if rules.pickup_is_overdue(ready_at, as_of)
+            }
+            return orders, overdue
 
     def get_order(self, principal: Principal | None, order_id: UUID) -> OrderDetail:
         with transaction(self.engine) as db:

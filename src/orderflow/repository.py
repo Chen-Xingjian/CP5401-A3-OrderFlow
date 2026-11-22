@@ -84,6 +84,17 @@ def list_visible(db: Connection, owner_id: str | None) -> list[Order]:
     return [read_order(row) for row in rows]
 
 
+def ready_pickup_times(db: Connection) -> dict[UUID, datetime]:
+    rows = db.execute(
+        text("""
+        SELECT o.id, h.occurred_at
+        FROM orders o JOIN order_history h ON h.order_id = o.id AND h.sequence = o.version
+        WHERE o.status = 'READY_FOR_PICKUP' AND h.to_status = 'READY_FOR_PICKUP'
+    """)
+    )
+    return {UUID(row.id): datetime.fromisoformat(row.occurred_at) for row in rows}
+
+
 def detail(db: Connection, order_id: UUID, owner_id: str | None) -> OrderDetail:
     scope = "" if owner_id is None else "AND o.owner_id = :owner"
     rows = (

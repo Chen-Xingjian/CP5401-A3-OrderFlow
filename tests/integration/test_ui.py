@@ -224,3 +224,61 @@ def test_t27_warm_upgrade_cancels_on_first_attempt(tmp_path, monkeypatch, v10_mi
             )
     finally:
         engine.dispose()
+
+
+def test_t30_staff_workload_and_handover(review_shop, service, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    from orderflow import repository
+
+    def totals(app):
+        return {item.label: int(item.value) for item in app.metric}
+
+    sam = Principal("staff-s")
+    alex = Principal("customer-a")
+    blair = Principal("customer-b")
+    app = staff(start())
+    empty = {"Pending confirmation": 0, "Confirmed": 0, "In production": 0, "Ready for pickup": 0}
+    assert totals(app) == empty
+
+    class OldClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.now(UTC) - timedelta(hours=49)
+
+    with monkeypatch.context() as old:
+        old.setattr(repository, "datetime", OldClock)
+        ready = service.create_order(blair, service_id="bw-print", quantity=1)
+        for stage in ("CONFIRMED", "PROCESSING", "READY_FOR_PICKUP"):
+            ready = service.advance_order(
+                sam, ready.id, target=stage, expected_version=ready.version
+            )
+    fresh = service.create_order(alex, service_id="bw-print", quantity=1)
+    for stage in ("CONFIRMED", "PROCESSING", "READY_FOR_PICKUP"):
+        fresh = service.advance_order(sam, fresh.id, target=stage, expected_version=fresh.version)
+    service.create_order(alex, service_id="bw-print", quantity=3)
+    confirmed = service.create_order(blair, service_id="bw-print", quantity=1)
+    service.advance_order(sam, confirmed.id, target="CONFIRMED", expected_version=0)
+    processing = service.create_order(alex, service_id="bw-print", quantity=1)
+    service.advance_order(sam, processing.id, target="CONFIRMED", expected_version=0)
+    service.advance_order(sam, processing.id, target="PROCESSING", expected_version=1)
+    cancelled = service.create_order(blair, service_id="bw-print", quantity=1)
+    service.cancel_order(blair, cancelled.id, expected_version=0)
+    active = {"Pending confirmation": 1, "Confirmed": 1, "In production": 1}
+    button(app, "Refresh orders").click().run()
+    assert totals(app) == {**active, "Ready for pickup": 2}
+    assert any("1 of 2" in c.value for c in app.caption)
+    picker = app.selectbox(key="chosen")
+    assert sum("Pickup overdue" in option for option in picker.options) == 1
+    picker.set_value(str(ready.id)).run()
+    assert "Ready since" in app.warning[0].value
+    button(app, "Confirm handover").click().run()
+    assert not app.warning
+    assert totals(app) == {**active, "Ready for pickup": 1}
+    assert any("0 of 1" in c.value for c in app.caption)
+    history = service.get_order(blair, ready.id).history
+    assert len(history) == 5 and history[-1].to_status == "COMPLETED"
+
+    app.radio(key="demo_role").set_value("Customer").run()
+    assert not app.metric and not app.warning
+    assert all("Pickup overdue" not in c.value for c in app.caption)

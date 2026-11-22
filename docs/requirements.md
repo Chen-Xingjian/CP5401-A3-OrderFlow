@@ -46,3 +46,7 @@ The student approved a role selector followed by a per-role user selector on the
 ## R4-02 local storage revision
 
 The student selected local SQLite for the demo. Each write uses BEGIN IMMEDIATE before checking the active identity and the displayed version. A second writer observes the newly committed version and receives STALE_VERSION. Local tests cover commit rollback and reopen the same file to check persistence. The R2 database choices above document the earlier PostgreSQL implementation.
+
+## CR002 staff workload and overdue pickup
+
+FR-07 / BR-13. Active staff see one count per open stage across all customers and a count of overdue pickups within the ready stage. On each render or refresh, compare the current instant with the recorded ready event. At 48 elapsed hours, including weekends, mark a still-ready order as **Pickup overdue** in the staff selector and detail. Display the ready time in Singapore time. Reading the queue preserves order versions and histories. A physical handover removes the order from both ready and overdue counts. Customers retain their own order views. [CR002](https://github.com/Chen-Xingjian/CP5401-OrderFlow/issues/6)

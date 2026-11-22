@@ -1,5 +1,7 @@
 """Streamlit entry point for the OrderFlow campus print shop."""
 
+from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -9,7 +11,7 @@ from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 from orderflow import demo
 from orderflow.db import database_path, migration_revision, open_engine
 from orderflow.models import OrderError, Principal
-from orderflow.rules import CANCELLABLE, NEXT_STATUS
+from orderflow.rules import CANCELLABLE, NEXT_STATUS, pickup_is_overdue
 from orderflow.services import OrderService
 
 LABELS = {
@@ -132,7 +134,20 @@ def order_list(service, actor, staff):
     ):
         st.header("Shop queue" if staff else "My orders", anchor="order-tracking", width="content")
         st.button("Refresh orders", icon=":material/refresh:")
-    orders = service.list_orders(actor)
+    as_of = datetime.now(UTC)
+    overdue = set()
+    if staff:
+        orders, overdue = service.staff_queue(actor, as_of=as_of)
+        counts = Counter(order.status for order in orders)
+        st.markdown("**Current workload**")
+        for column, stage in zip(st.columns(len(NEXT_STATUS)), NEXT_STATUS, strict=True):
+            column.metric(LABELS[stage], counts[stage], border=True)
+        st.caption(
+            f"Pickup overdue: {len(overdue)} of {counts['READY_FOR_PICKUP']} ready for pickup · "
+            "48 hours or more since marked ready."
+        )
+    else:
+        orders = service.list_orders(actor)
     if not orders:
         st.info(
             "The queue is empty." if staff else "Your orders will appear here after you place one."
@@ -142,7 +157,10 @@ def order_list(service, actor, staff):
 
     def label(value):
         o = choices[value]
-        return f"{str(o.id)[:8].upper()} · {o.service_name_snapshot} · {LABELS[o.status]}"
+        stage = LABELS[o.status]
+        if o.id in overdue:
+            stage += " · Pickup overdue"
+        return f"{str(o.id)[:8].upper()} · {o.service_name_snapshot} · {stage}"
 
     if st.session_state.get("chosen") not in choices:
         st.session_state["chosen"] = next(iter(choices))
@@ -152,6 +170,13 @@ def order_list(service, actor, staff):
     with st.container(key="receipt"):
         st.subheader(LABELS[o.status], anchor=False)
         st.write(INSTRUCTIONS[o.status])
+        if staff and o.status == "READY_FOR_PICKUP":
+            ready_at = detail.history[-1].occurred_at
+            if pickup_is_overdue(ready_at, as_of):
+                st.warning(
+                    f"Pickup overdue · Ready since {ready_at.astimezone(SG):%d %b %Y, %H:%M} SGT."
+                )
+
         first, second = st.columns([3, 1])
         first.caption("Print service")
         first.write(o.service_name_snapshot)
