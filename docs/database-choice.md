@@ -1,14 +1,28 @@
-# Database assessment for R2-01
+# Database choice and local import
+
+The deployed shop and its current test suite use SQLite. The [R4-02 decision](iterations/R4-02.md) records the move from PostgreSQL. The original R2 assessment below documents the options considered before that decision.
+
+## Import an existing R3 shop
+
+If the project directory contains a local R3 PostgreSQL shop, leave it running and make its original `psql` available on `PATH`. From the repository root, activate the project's Python environment and run this command before the first SQLite launch:
+
+```sh
+PYTHONPATH=src python -m support.import_review
+```
+
+The importer reads a single snapshot of the users, catalogue, orders and history. It verifies the rows and foreign keys before publishing the new SQLite file and refuses to overwrite an existing file. Legacy password records remain in PostgreSQL. For a fresh installation, follow the [local startup instructions](../README.md#run-locally).
+
+## Original R2-01 assessment
 
 Assessment date is 17 November 2026. The recommendation assumes a Streamlit Community Cloud deployment with orders retained across application sessions and deployment lifecycle events. The hosting service and database provider remain to be selected and verified.
 
-## Assignment and approved behaviour
+### Assignment and approved behaviour
 
 A3 describes a small application as the vehicle for software quality engineering on page 2. Its minimum requirements on page 3 include correctly managed information, important business rules, automated tests, CI and a browser-accessible application. The HD rubric on pages 10–12 assesses realistic testable requirements, reliable behaviour, traceability and credible quality evidence. It leaves the database product open. PostgreSQL was an architectural choice in the project plan. SQLite could support the same assessed business behaviour.
 
 R1-01 requires atomic order and history writes, customer-scoped access, a useful response to stale staff requests and data retained when a connection is reopened. Both engines can implement those contracts. The transaction and concurrency experiments must exercise the engine selected for deployment.
 
-## Candidate comparison
+### Candidate comparison
 
 | Consideration | Local SQLite file | External PostgreSQL |
 |---|---|---|
@@ -28,13 +42,13 @@ PostgreSQL SELECT FOR UPDATE waits for a competing writer on the same row. Under
 
 Streamlit supports SQLite, but its Community Cloud documentation explicitly leaves local file persistence unguaranteed. An order database stored in that filesystem needs a separate durable-storage design. A hosted PostgreSQL connection addresses the storage location directly. Provider retention, configuration and application reconnect behaviour still need deployment verification. [Streamlit data connections](https://docs.streamlit.io/develop/concepts/connections/connecting-to-data)
 
-## Recommendation for this candidate
+### Recommendation for this candidate
 
 Keep the single PostgreSQL database for the current Community Cloud direction. Use a single schema migration and the existing short service calls. The reason is the fit between deployment storage and the approved consistency contracts. The project can demonstrate HD quality work with either engine through suitable requirements, tests, human review and controlled change evidence.
 
 Choose SQLite if the intended deployment becomes a single host with reliable retained disk and the priority is eliminating a separate database service. That choice would be a revision within R2. Carry over the approved input, access and lifecycle behaviour, then verify rollback, two independent connections, stale-version response and persistent file reopening on the revised candidate.
 
-## Scope of a SQLite revision
+### Scope of a SQLite revision
 
 | File or area | Work required |
 |---|---|
