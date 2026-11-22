@@ -92,13 +92,15 @@ def list_visible(db: Connection, owner_id: str | None) -> list[Order]:
     return [read_order(row) for row in rows]
 
 
-def ready_pickup_times(db: Connection) -> dict[UUID, datetime]:
+def ready_pickup_times(db: Connection, owner_id: str | None) -> dict[UUID, datetime]:
+    scope = "" if owner_id is None else "AND o.owner_id = :owner"
     rows = db.execute(
-        text("""
+        text(f"""
         SELECT o.id, h.occurred_at
         FROM orders o JOIN order_history h ON h.order_id = o.id AND h.sequence = o.version
-        WHERE o.status = 'READY_FOR_PICKUP' AND h.to_status = 'READY_FOR_PICKUP'
-    """)
+        WHERE o.status = 'READY_FOR_PICKUP' AND h.to_status = 'READY_FOR_PICKUP' {scope}
+    """),
+        {"owner": owner_id},
     )
     return {UUID(row.id): datetime.fromisoformat(row.occurred_at) for row in rows}
 
@@ -108,8 +110,11 @@ def detail(db: Connection, order_id: UUID, owner_id: str | None) -> OrderDetail:
     rows = (
         db.execute(
             text(f"""
-            SELECT o.*, h.sequence, h.from_status, h.to_status, h.actor_id, h.occurred_at
+            SELECT o.*, h.sequence, h.from_status, h.to_status, h.actor_id, h.occurred_at,
+                   owner.username AS owner_name, actor.username AS actor_name
             FROM orders o JOIN order_history h ON h.order_id = o.id
+            JOIN users owner ON owner.id = o.owner_id
+            JOIN users actor ON actor.id = h.actor_id
             WHERE o.id = :id {scope} ORDER BY h.sequence
         """),
             {"id": str(order_id), "owner": owner_id},
@@ -127,10 +132,11 @@ def detail(db: Connection, order_id: UUID, owner_id: str | None) -> OrderDetail:
             row.to_status,
             row.actor_id,
             datetime.fromisoformat(row.occurred_at),
+            row.actor_name,
         )
         for row in rows
     )
-    return OrderDetail(order, history)
+    return OrderDetail(order, history, rows[0].owner_name)
 
 
 def current_order(db: Connection, order_id: UUID, owner_id: str | None = None) -> Order:

@@ -34,6 +34,18 @@ def _record_transition(db: Connection, current: Order, target: str, principal: P
     return updated
 
 
+def _pickup_queue(
+    db: Connection, owner_id: str | None, as_of: datetime
+) -> tuple[list[Order], set[UUID]]:
+    orders = repository.list_visible(db, owner_id)
+    overdue = {
+        order_id
+        for order_id, ready_at in repository.ready_pickup_times(db, owner_id).items()
+        if rules.pickup_is_overdue(ready_at, as_of)
+    }
+    return orders, overdue
+
+
 class OrderService:
     def __init__(self, engine: Engine):
         self.engine = engine
@@ -68,13 +80,14 @@ class OrderService:
     ) -> tuple[list[Order], set[UUID]]:
         with transaction(self.engine) as db:
             _require_role(_role(db, principal), "STAFF")
-            orders = repository.list_visible(db, None)
-            overdue = {
-                order_id
-                for order_id, ready_at in repository.ready_pickup_times(db).items()
-                if rules.pickup_is_overdue(ready_at, as_of)
-            }
-            return orders, overdue
+            return _pickup_queue(db, None, as_of)
+
+    def customer_queue(
+        self, principal: Principal, *, as_of: datetime
+    ) -> tuple[list[Order], set[UUID]]:
+        with transaction(self.engine) as db:
+            _require_role(_role(db, principal), "CUSTOMER")
+            return _pickup_queue(db, principal.user_id, as_of)
 
     def get_order(self, principal: Principal | None, order_id: UUID) -> OrderDetail:
         with transaction(self.engine) as db:
