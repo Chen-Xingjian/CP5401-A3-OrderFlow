@@ -170,7 +170,7 @@ def test_t28_confirmed_cancellation_and_staff_queue(review_shop, service):
     staff(app)
     assert app.selectbox(key="chosen").value == str(order.id)
     assert app.subheader[0].value == "Cancelled"
-    assert [b.label for b in app.button] == ["Refresh orders"]
+    assert not any(b.key and b.key.startswith(("advance_", "cancel_")) for b in app.button)
 
 
 def test_t28_stale_owner_page_requests_refresh(review_shop, service):
@@ -232,13 +232,18 @@ def test_t30_staff_workload_and_handover(review_shop, service, monkeypatch):
     from orderflow import repository
 
     def totals(app):
-        return {item.label: int(item.value) for item in app.metric}
+        return {
+            b.label.rsplit(" (", 1)[0]: int(b.label.rsplit("(", 1)[1][:-1])
+            for b in app.button
+            if b.key and b.key.startswith("filter_")
+        }
 
     sam = Principal("staff-s")
     alex = Principal("customer-a")
     blair = Principal("customer-b")
     app = staff(start())
     empty = {"Pending confirmation": 0, "Confirmed": 0, "In production": 0, "Ready for pickup": 0}
+    empty.update({"Completed": 0, "Cancelled": 0, "Pickup overdue": 0})
     assert totals(app) == empty
 
     class OldClock(datetime):
@@ -256,7 +261,7 @@ def test_t30_staff_workload_and_handover(review_shop, service, monkeypatch):
     fresh = service.create_order(alex, service_id="bw-print", quantity=1)
     for stage in ("CONFIRMED", "PROCESSING", "READY_FOR_PICKUP"):
         fresh = service.advance_order(sam, fresh.id, target=stage, expected_version=fresh.version)
-    service.create_order(alex, service_id="bw-print", quantity=3)
+    pending = service.create_order(alex, service_id="bw-print", quantity=3)
     confirmed = service.create_order(blair, service_id="bw-print", quantity=1)
     service.advance_order(sam, confirmed.id, target="CONFIRMED", expected_version=0)
     processing = service.create_order(alex, service_id="bw-print", quantity=1)
@@ -264,21 +269,68 @@ def test_t30_staff_workload_and_handover(review_shop, service, monkeypatch):
     service.advance_order(sam, processing.id, target="PROCESSING", expected_version=1)
     cancelled = service.create_order(blair, service_id="bw-print", quantity=1)
     service.cancel_order(blair, cancelled.id, expected_version=0)
-    active = {"Pending confirmation": 1, "Confirmed": 1, "In production": 1}
+    active = {
+        **empty,
+        "Pending confirmation": 1,
+        "Confirmed": 1,
+        "In production": 1,
+        "Cancelled": 1,
+    }
     button(app, "Refresh orders").click().run()
-    assert totals(app) == {**active, "Ready for pickup": 2}
+    assert totals(app) == {**active, "Ready for pickup": 2, "Pickup overdue": 1}
     assert any("1 of 2" in c.value for c in app.caption)
     picker = app.selectbox(key="chosen")
     assert sum("Pickup overdue" in option for option in picker.options) == 1
-    picker.set_value(str(ready.id)).run()
+    full_counts = totals(app)
+    members = {
+        "PENDING": [pending],
+        "CONFIRMED": [confirmed],
+        "PROCESSING": [processing],
+        "READY_FOR_PICKUP": [ready, fresh],
+        "CANCELLED": [cancelled],
+        "OVERDUE": [ready],
+    }
+    for stage, expected in members.items():
+        app.button(key=f"filter_{stage}").click().run()
+        assert not app.exception
+        options = app.selectbox(key="chosen").options
+        assert {option.split(" · ")[0] for option in options} == {
+            str(order.id)[:8].upper() for order in expected
+        }
+        assert app.selectbox(key="chosen").value in {str(order.id) for order in expected}
+        assert totals(app) == full_counts
+
+    button(app, "Refresh orders").click().run()
+    assert app.selectbox(key="chosen").value == str(ready.id)
     assert "Ready since" in app.warning[0].value
     button(app, "Confirm handover").click().run()
     assert not app.warning
-    assert totals(app) == {**active, "Ready for pickup": 1}
+    assert any("No orders match the Pickup overdue filter" in item.value for item in app.info)
+    assert not any(s.key == "chosen" for s in app.selectbox) and not app.subheader
+    button(app, "Clear filter").click().run()
+    assert len(app.selectbox(key="chosen").options) == 6
+    assert button(app, "Clear filter").disabled
+    app.button(key="filter_COMPLETED").click().run()
+    assert app.selectbox(key="chosen").value == str(ready.id)
+    assert totals(app) == {**active, "Ready for pickup": 1, "Completed": 1}
     assert any("0 of 1" in c.value for c in app.caption)
     history = service.get_order(blair, ready.id).history
     assert len(history) == 5 and history[-1].to_status == "COMPLETED"
 
     app.radio(key="demo_role").set_value("Customer").run()
-    assert not app.metric and not app.warning
+    assert not totals(app) and not app.warning
     assert all("Pickup overdue" not in c.value for c in app.caption)
+
+
+def test_t31_staff_filter_resets_on_identity_change(review_shop, service):
+    order = service.create_order(Principal("customer-a"), service_id="bw-print", quantity=1)
+    app = staff(start())
+    app.button(key="filter_CANCELLED").click().run()
+    assert not any(s.key == "chosen" for s in app.selectbox)
+    choose(app, "staff-t")
+    assert button(app, "Clear filter").disabled
+    assert app.selectbox(key="chosen").value == str(order.id)
+    app.button(key="filter_CONFIRMED").click().run()
+    app.radio(key="demo_role").set_value("Customer").run()
+    assert app.selectbox(key="chosen").value == str(order.id)
+    assert all(b.label != "Clear filter" for b in app.button)

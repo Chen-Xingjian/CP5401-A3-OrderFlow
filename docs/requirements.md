@@ -50,3 +50,5 @@ The student selected local SQLite for the demo. Each write uses BEGIN IMMEDIATE 
 ## CR002 staff workload and overdue pickup
 
 FR-07 / BR-13. Active staff see one count per open stage across all customers and a count of overdue pickups within the ready stage. On each render or refresh, compare the current instant with the recorded ready event. At 48 elapsed hours, including weekends, mark a still-ready order as **Pickup overdue** in the staff selector and detail. Display the ready time in Singapore time. Reading the queue preserves order versions and histories. A physical handover removes the order from both ready and overdue counts. Customers retain their own order views. [CR002](https://github.com/Chen-Xingjian/CP5401-OrderFlow/issues/6)
+
+Staff can select one status or Pickup overdue to restrict the order picker and its details. Ready for pickup includes overdue pickups. Counts always describe the entire queue. Clear filter restores all orders, including completed and cancelled orders. Refresh retains the current filter. Switching demo identity clears it.

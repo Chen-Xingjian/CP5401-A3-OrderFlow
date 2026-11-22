@@ -22,6 +22,7 @@ LABELS = {
     "COMPLETED": "Completed",
     "CANCELLED": "Cancelled",
 }
+QUEUE_FILTERS = {**LABELS, "OVERDUE": "Pickup overdue"}
 ACTIONS = {
     "PENDING": "Confirm order",
     "CONFIRMED": "Start production",
@@ -48,7 +49,7 @@ def connect(path, schema_revision):
 
 
 def clear_workspace():
-    for key in ("actor", "chosen", "feedback"):
+    for key in ("actor", "chosen", "feedback", "queue_filter"):
         st.session_state.pop(key, None)
 
 
@@ -128,6 +129,39 @@ def order_form(service, actor):
         )
 
 
+def set_queue_filter(stage):
+    st.session_state["queue_filter"] = stage
+
+
+def queue_filters(orders, overdue):
+    counts = Counter(order.status for order in orders)
+    counts["OVERDUE"] = len(overdue)
+    selected = st.session_state.get("queue_filter")
+    with st.container(
+        horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"
+    ):
+        st.markdown("**Current workload**")
+        st.button(
+            "Clear filter", disabled=selected is None, on_click=set_queue_filter, args=(None,)
+        )
+    with st.container(horizontal=True, gap="small"):
+        for stage, label in QUEUE_FILTERS.items():
+            active = stage == selected
+            st.button(
+                f"{label} ({counts[stage]})",
+                key=f"filter_{stage}",
+                type="primary" if active else "secondary",
+                icon=":material/check:" if active else None,
+                on_click=set_queue_filter,
+                args=(stage,),
+            )
+    st.caption(
+        f"Pickup overdue: {len(overdue)} of {counts['READY_FOR_PICKUP']} ready for pickup · "
+        "48 hours or more since marked ready."
+    )
+    return selected
+
+
 def order_list(service, actor, staff):
     with st.container(
         horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"
@@ -138,14 +172,15 @@ def order_list(service, actor, staff):
     overdue = set()
     if staff:
         orders, overdue = service.staff_queue(actor, as_of=as_of)
-        counts = Counter(order.status for order in orders)
-        st.markdown("**Current workload**")
-        for column, stage in zip(st.columns(len(NEXT_STATUS)), NEXT_STATUS, strict=True):
-            column.metric(LABELS[stage], counts[stage], border=True)
-        st.caption(
-            f"Pickup overdue: {len(overdue)} of {counts['READY_FOR_PICKUP']} ready for pickup · "
-            "48 hours or more since marked ready."
-        )
+        selected = queue_filters(orders, overdue)
+        if selected:
+            if selected == "OVERDUE":
+                orders = [order for order in orders if order.id in overdue]
+            else:
+                orders = [order for order in orders if order.status == selected]
+            if not orders:
+                st.info(f"No orders match the {QUEUE_FILTERS[selected]} filter.")
+                return
     else:
         orders = service.list_orders(actor)
     if not orders:
@@ -167,6 +202,9 @@ def order_list(service, actor, staff):
     selection = st.selectbox("Select order", list(choices), format_func=label, key="chosen")
     detail = service.get_order(actor, choices[selection].id)
     o = detail.order
+    if staff and selected and o.version != choices[selection].version:
+        # A concurrent transition may have moved the order out of this filtered snapshot.
+        st.rerun()
     with st.container(key="receipt"):
         st.subheader(LABELS[o.status], anchor=False)
         st.write(INSTRUCTIONS[o.status])
