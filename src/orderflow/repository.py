@@ -24,7 +24,15 @@ def active_role(db: Connection, user_id: str) -> str | None:
     ).scalar_one_or_none()
 
 
-def create(db: Connection, owner_id: str, service_id: str, quantity: int, note: str) -> Order:
+def create(
+    db: Connection,
+    owner_id: str,
+    service_id: str,
+    quantity: int,
+    note: str,
+    *,
+    occurred_at: datetime | None = None,
+) -> Order:
     service_name = db.execute(
         text("SELECT name FROM service_catalogue WHERE id = :id AND active"),
         {"id": service_id},
@@ -42,7 +50,7 @@ def create(db: Connection, owner_id: str, service_id: str, quantity: int, note: 
         """),
             {
                 "id": str(uuid4()),
-                "now": datetime.now(UTC).isoformat(timespec="microseconds"),
+                "now": (occurred_at or datetime.now(UTC)).isoformat(timespec="microseconds"),
                 "owner": owner_id,
                 "service": service_id,
                 "name": service_name,
@@ -140,7 +148,13 @@ def current_order(db: Connection, order_id: UUID, owner_id: str | None = None) -
     return read_order(row)
 
 
-def advance(db: Connection, order_id: UUID, target: str) -> Order:
+def advance(
+    db: Connection,
+    order_id: UUID,
+    target: str,
+    *,
+    occurred_at: datetime | None = None,
+) -> Order:
     row = (
         db.execute(
             text("""
@@ -149,7 +163,7 @@ def advance(db: Connection, order_id: UUID, target: str) -> Order:
             WHERE id = :id RETURNING *
         """),
             {
-                "now": datetime.now(UTC).isoformat(timespec="microseconds"),
+                "now": (occurred_at or datetime.now(UTC)).isoformat(timespec="microseconds"),
                 "target": target,
                 "id": str(order_id),
             },

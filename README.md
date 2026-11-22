@@ -56,3 +56,11 @@ The student accepted the hosted workflow on order `12E39BC5` and authorised the 
 - [R4 release verification](docs/iterations/R4-01.md)
 
 - [R4-02 local acceptance decision](docs/iterations/R4-02.md)
+
+## Pickup demonstration
+
+For the dedicated Streamlit demo site, select `src/scenario_app.py` as the main file and use Python 3.12. To preview locally, run `python -m streamlit run src/scenario_app.py` from the repository root.
+
+Choose **Start demo scenario** to open a private staff queue as Sam. Both sample orders are ready for pickup. Blair's Workshop handouts became ready 50 hours before the scenario started. Alex's Library posters became ready at startup. Choose **Pickup overdue (1)**, inspect the history, then use **Confirm handover** to demonstrate the transition. **Clear filter** shows both orders again. **Restart demo scenario** replaces this session's sample orders with a fresh pair.
+
+Each visitor session uses its own temporary SQLite file. The shared application continues to use `src/app.py`. Reloading the browser can start a new Streamlit session.

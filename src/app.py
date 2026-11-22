@@ -255,7 +255,11 @@ def order_list(service, actor, staff):
                 )
 
 
-def main():
+def shared_shop():
+    return OrderService(connect(database_path(), migration_revision()))
+
+
+def main(get_service=shared_shop):
     st.set_page_config(page_title="OrderFlow · Campus print shop", page_icon="📄", layout="wide")
     st.html(Path(__file__).with_name("workspace.css"))
     with st.container(key="masthead"):
@@ -266,7 +270,9 @@ def main():
             st.title("OrderFlow", anchor=False)
             st.caption("Campus print shop · Fictional demo accounts")
     try:
-        service = OrderService(connect(database_path(), migration_revision()))
+        service = get_service()
+        if service is None:
+            return
         role = role_control.radio(
             "Demo role",
             ["Customer", "Staff"],
@@ -313,4 +319,5 @@ def main():
         st.error("The demo database is unavailable. Check its connection and migrations.")
 
 
-main()
+if __name__ == "__main__":
+    main()
