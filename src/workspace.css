@@ -1,0 +1,75 @@
+/* The keyed containers belong to OrderFlow. Keep the native widgets and focus states. */
+.stMainBlockContainer {
+    max-width: 1220px;
+    padding-top: 3.75rem;
+}
+.st-key-masthead {
+    padding: 0 0 1.25rem;
+    border-bottom: 1px solid #c2cdc6;
+    margin-bottom: .65rem;
+}
+.st-key-masthead h1 {
+    font-family: Georgia, serif;
+    font-size: clamp(2.5rem, 5vw, 3.65rem);
+    line-height: 1;
+    color: color-mix(in srgb, currentColor 65%, #16786b);
+    letter-spacing: -.055em;
+    padding: 0;
+}
+.st-key-create_panel, .st-key-track_panel {
+    padding: clamp(1rem, 2.5vw, 1.75rem);
+    border: 1px solid #ccd7d1;
+    border-radius: 16px;
+    min-width: 0;
+}
+.st-key-create_panel {
+    background: rgb(38 129 104 / 8%);
+    border-top: 4px solid #18645d;
+}
+.st-key-track_panel {
+    background: rgb(255 255 255 / 4%);
+    border-top: 4px solid #b48746;
+}
+.st-key-create_panel h2, .st-key-track_panel h2 {
+    font-family: Georgia, serif;
+    font-size: clamp(1.6rem, 2.7vw, 2.1rem);
+    letter-spacing: -.035em;
+    line-height: 1.15;
+    padding: 0;
+}
+.st-key-receipt {
+    border-block: 1px solid #dce1d7;
+    padding: 1rem 0;
+}
+.st-key-history h3, .st-key-receipt h3 {
+    padding: 0;
+    font-size: 1.18rem;
+}
+.st-key-history {
+    gap: .65rem;
+}
+.st-key-history [class*="st-key-event_"] {
+    position: relative;
+    border-left: 2px solid #9cb7ad;
+    margin-left: .3rem;
+    padding-left: 1rem;
+}
+.st-key-history [class*="st-key-event_"]::before {
+    content: "";
+    position: absolute;
+    left: -5px;
+    top: .45rem;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #236c62;
+}
+@media (max-width: 700px) {
+    .stMainBlockContainer { padding: 3.5rem 1rem 2rem; }
+    .st-key-masthead { margin-bottom: 0; }
+}
+.order-jump { display: none; }
+@media (max-width: 640px) {
+    .order-jump { display: inline-block; font-weight: 600; }
+    #order-tracking { scroll-margin-top: 4rem; }
+}
