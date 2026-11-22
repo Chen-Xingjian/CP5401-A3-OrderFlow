@@ -34,9 +34,11 @@ sh scripts/check.sh
 
 CI runs the same command on isolated, temporary SQLite files. Tests cover the order lifecycle, customer boundaries, stale staff updates, writer contention, rollback at commit, migration and single-page role switching.
 
-## Submission status
+## V1.0 baseline
 
 The student accepted the local SQLite candidate v1.0.0-rc.2 on 22 November 2026 after checking customer order visibility and staff handover attribution. The SQLite demo is [live on Streamlit Community Cloud](https://cp5401-orderflow.streamlit.app/). On 22 November 2026 an independent visitor session opened the customer order form without signing in.
+
+The student accepted the hosted workflow on order `12E39BC5` and authorised the formal release. [Hosted acceptance record](docs/iterations/V1.0-acceptance.md) · [V1.0 release](https://github.com/Chen-Xingjian/CP5401-OrderFlow/releases/tag/v1.0.0)
 
 ## Project records
 
