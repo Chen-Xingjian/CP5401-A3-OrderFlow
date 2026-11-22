@@ -30,3 +30,17 @@ T20 now exercises one-page role and user switching, customer drafts and order is
 ## R4-02 SQLite verification
 
 The current suite runs on temporary SQLite files. T15–T16 use a history trigger for a statement failure and a deferred foreign-key violation for a commit failure. T17 synchronises two staff connections after reading the same version. T19 reopens the file and reapplies migrations. Import checks preserve order history, reject overwrite and discard failed copies.
+
+
+## R6 cancellation regression
+
+| Cases | Oracle and evidence |
+| --- | --- |
+| T21–T22 | An eligible owner adds one attributed event. At or after production, the entire order and history match their pre-request snapshot. Unit and SQLite tests check both sides of the cutoff. |
+| T23–T24 | The service checks access before version or state. Cross-customer and missing-order results match. Old and current-version retries have distinct outcomes. Every attempted staff transition from Cancelled fails. |
+| T25 | Two connections read the same confirmed version before competing. Only one commits, and its actor and target match the last history event. |
+| T26 | A history-write trigger or a deferred constraint interrupts cancellation. A separate read sees the original confirmed order and both previous events. |
+| T27 | Upgrade a backup of a populated V1.0 file twice. Compare full snapshots for two owners, check foreign keys and the owner index, then progress a legacy order. |
+| T28 | Streamlit AppTest checks eligible and ineligible views, owner switching, cancelled history in the staff queue, and stale-page refresh feedback. |
+
+The original T19 migration inventory now includes the third checksum-tracked migration. The V1.0 test cases still run in the complete suite. The student's manual VAL-02 review is tracked separately in the R6 report.

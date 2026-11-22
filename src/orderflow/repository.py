@@ -114,9 +114,13 @@ def detail(db: Connection, order_id: UUID, owner_id: str | None) -> OrderDetail:
     return OrderDetail(order, history)
 
 
-def current_order(db: Connection, order_id: UUID) -> Order:
+def current_order(db: Connection, order_id: UUID, owner_id: str | None = None) -> Order:
+    scope = "" if owner_id is None else " AND owner_id = :owner"
     row = (
-        db.execute(text("SELECT * FROM orders WHERE id = :id"), {"id": str(order_id)})
+        db.execute(
+            text(f"SELECT * FROM orders WHERE id = :id{scope}"),
+            {"id": str(order_id), "owner": owner_id},
+        )
         .mappings()
         .one_or_none()
     )

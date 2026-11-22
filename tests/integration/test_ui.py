@@ -151,3 +151,38 @@ def test_sqlite_migration_preserves_existing_history(tmp_path, monkeypatch):
                     password_record(PASSWORD),
                 )
             assert svc.get_order(authenticate(legacy, "alex", PASSWORD), order.id) == snapshot
+
+
+def test_t28_confirmed_cancellation_and_staff_queue(review_shop, service):
+    order = service.create_order(Principal("customer-a"), service_id="bw-print", quantity=2)
+    app = start()
+    assert button(app, "Cancel order")
+    choose(app, "customer-b")
+    assert not any(b.label == "Cancel order" for b in app.button)
+    staff(app)
+    assert not any(b.label == "Cancel order" for b in app.button)
+    button(app, "Confirm order").click().run()
+    app.radio(key="demo_role").set_value("Customer").run()
+    button(app, "Cancel order").click().run()
+    assert not app.exception and app.success[0].value == "Order cancelled."
+    assert app.subheader[0].value == "Cancelled"
+    assert any(m.value == "Confirmed → Cancelled" for m in app.markdown)
+    staff(app)
+    assert app.selectbox(key="chosen").value == str(order.id)
+    assert app.subheader[0].value == "Cancelled"
+    assert [b.label for b in app.button] == ["Refresh orders"]
+
+
+def test_t28_stale_owner_page_requests_refresh(review_shop, service):
+    owner = Principal("customer-a")
+    order = service.create_order(owner, service_id="bw-print", quantity=2)
+    sam = Principal("staff-s")
+    service.advance_order(sam, order.id, target="CONFIRMED", expected_version=0)
+    app = start()
+    service.advance_order(sam, order.id, target="PROCESSING", expected_version=1)
+    button(app, "Cancel order").click().run()
+    assert not app.exception and not app.success
+    assert "Refresh" in app.error[0].value
+    assert app.subheader[0].value == "In production"
+    assert not any(b.label == "Cancel order" for b in app.button)
+    assert len(service.get_order(owner, order.id).history) == 3
