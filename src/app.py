@@ -1,5 +1,6 @@
 """Streamlit entry point for the OrderFlow campus print shop."""
 
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import streamlit as st
@@ -103,12 +104,12 @@ def cancel(service, order_id, version):
 
 
 def order_form(service, actor):
-    st.header("Place an order")
+    st.header("Place an order", anchor=False)
     options = service.available_services(actor)
     if not options:
         st.info("The shop has no services available.")
         return
-    with st.form(f"new_order_{actor.user_id}"):
+    with st.form(f"new_order_{actor.user_id}", border=False):
         st.selectbox(
             "Print service", list(options), format_func=options.get, key=f"item_{actor.user_id}"
         )
@@ -117,12 +118,20 @@ def order_form(service, actor):
         )
         st.text_area("Print notes (optional)", max_chars=500, key=f"note_{actor.user_id}")
         st.form_submit_button(
-            "Place order", on_click=new_order, args=(service, actor), type="primary"
+            "Place order",
+            on_click=new_order,
+            args=(service, actor),
+            type="primary",
+            width="stretch",
         )
 
 
 def order_list(service, actor, staff):
-    st.header("Shop queue" if staff else "My orders")
+    with st.container(
+        horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"
+    ):
+        st.header("Shop queue" if staff else "My orders", anchor="order-tracking", width="content")
+        st.button("Refresh orders", icon=":material/refresh:")
     orders = service.list_orders(actor)
     if not orders:
         st.info(
@@ -140,12 +149,14 @@ def order_list(service, actor, staff):
     selection = st.selectbox("Select order", list(choices), format_func=label, key="chosen")
     detail = service.get_order(actor, choices[selection].id)
     o = detail.order
-    with st.container(border=True):
-        st.subheader(LABELS[o.status])
+    with st.container(key="receipt"):
+        st.subheader(LABELS[o.status], anchor=False)
         st.write(INSTRUCTIONS[o.status])
         first, second = st.columns([3, 1])
-        first.metric("Print service", o.service_name_snapshot)
-        second.metric("Quantity", o.quantity)
+        first.caption("Print service")
+        first.write(o.service_name_snapshot)
+        second.caption("Quantity")
+        second.write(str(o.quantity))
         st.caption(f"Order ID · {o.id}")
         if staff:
             st.caption(f"Customer · {o.owner_id}")
@@ -170,20 +181,30 @@ def order_list(service, actor, staff):
                 on_click=advance,
                 args=(service, o.id, o.status, o.version),
             )
-    st.subheader("Order history")
-    for item in reversed(detail.history):
-        source = LABELS[item.from_status] if item.from_status else "Order created"
-        st.write(f"{source} → {LABELS[item.to_status]}")
-        st.caption(f"{item.occurred_at.astimezone(SG):%d %b %Y, %H:%M} SGT · {item.actor_id}")
+    with st.container(key="history"):
+        st.subheader("Order history", anchor=False)
+        for item in reversed(detail.history):
+            source = LABELS[item.from_status] if item.from_status else "Order created"
+            with st.container(key=f"event_{item.sequence}", gap=None):
+                st.write(f"{source} → {LABELS[item.to_status]}")
+                st.caption(
+                    f"{item.occurred_at.astimezone(SG):%d %b %Y, %H:%M} SGT · {item.actor_id}"
+                )
 
 
 def main():
-    st.set_page_config(page_title="OrderFlow · Campus print shop", page_icon="📄")
-    st.title("OrderFlow")
-    st.caption("Campus print shop · Demo workspace with fictional accounts")
+    st.set_page_config(page_title="OrderFlow · Campus print shop", page_icon="📄", layout="wide")
+    st.html(Path(__file__).with_name("workspace.css"))
+    with st.container(key="masthead"):
+        identity, role_control, user_control = st.columns(
+            [2.1, 1.2, 1], vertical_alignment="center"
+        )
+        with identity:
+            st.title("OrderFlow", anchor=False)
+            st.caption("Campus print shop · Fictional demo accounts")
     try:
         service = OrderService(connect(database_path(), migration_revision()))
-        role = st.radio(
+        role = role_control.radio(
             "Demo role",
             ["Customer", "Staff"],
             horizontal=True,
@@ -198,7 +219,7 @@ def main():
         if st.session_state.get("demo_user") not in users:
             clear_workspace()
             st.session_state["demo_user"] = next(iter(users))
-        selected = st.selectbox(
+        selected = user_control.selectbox(
             "Demo user",
             list(users),
             format_func=users.get,
@@ -215,9 +236,14 @@ def main():
             kind, message = feedback
             (st.success if kind == "success" else st.error)(message)
         if role == "Customer":
-            order_form(service, actor)
-        st.button("Refresh orders")
-        order_list(service, actor, role == "Staff")
+            st.html('<a class="order-jump" href="#order-tracking">Jump to my orders ↓</a>')
+            create, track = st.columns([0.85, 1.35], gap="medium")
+            with create.container(key="create_panel"):
+                order_form(service, actor)
+        else:
+            track = st
+        with track.container(key="track_panel"):
+            order_list(service, actor, role == "Staff")
     except OrderError as error:
         st.error(str(error))
     except (ValueError, OSError, ArgumentError, SQLAlchemyError, RuntimeError):
