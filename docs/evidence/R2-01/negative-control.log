@@ -1,0 +1,20 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+______________ test_t14_replay_returns_refresh_before_edge_check _______________
+tests/integration/test_orders.py:202: in test_t14_replay_returns_refresh_before_edge_check
+    assert error.value.code == "STALE_VERSION"
+E   AssertionError: assert 'INVALID_TRANSITION' == 'STALE_VERSION'
+E     
+E     - STALE_VERSION
+E     + INVALID_TRANSITION
+_____________________ test_t17_two_connections_one_commit ______________________
+tests/integration/test_transactions.py:89: in test_t17_two_connections_one_commit
+    assert sorted(result for _, result in results) == ["COMMITTED", "STALE_VERSION"]
+E   AssertionError: assert ['COMMITTED',...D_TRANSITION'] == ['COMMITTED', 'STALE_VERSION']
+E     
+E     At index 1 diff: 'INVALID_TRANSITION' != 'STALE_VERSION'
+E     Use -v to get more diff
+=========================== short test summary info ============================
+FAILED tests/integration/test_orders.py::test_t14_replay_returns_refresh_before_edge_check
+FAILED tests/integration/test_transactions.py::test_t17_two_connections_one_commit
+2 failed, 86 deselected in 0.34s

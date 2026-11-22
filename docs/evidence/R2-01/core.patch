@@ -1,0 +1,1218 @@
+diff --git a/.dockerignore b/.dockerignore
+new file mode 100644
+--- /dev/null
++++ b/.dockerignore
+@@ -0,0 +1,8 @@
++.git
++.venv
++.env
++.streamlit
++**/__pycache__
++.pytest_cache
++.ruff_cache
++reports
+diff --git a/.gitattributes b/.gitattributes
+new file mode 100644
+--- /dev/null
++++ b/.gitattributes
+@@ -0,0 +1 @@
++* text=auto eol=lf
+diff --git a/.github/workflows/quality-checks.yml b/.github/workflows/quality-checks.yml
+new file mode 100644
+--- /dev/null
++++ b/.github/workflows/quality-checks.yml
+@@ -0,0 +1,46 @@
++name: OrderFlow core checks
++on:
++  pull_request:
++    branches: [main]
++  push:
++    branches: [main]
++  workflow_dispatch:
++
++permissions:
++  contents: read
++
++jobs:
++  core:
++    runs-on: ubuntu-latest
++    timeout-minutes: 12
++    services:
++      db:
++        image: postgres:16
++        env:
++          POSTGRES_DB: orderflow_test
++          POSTGRES_USER: orderflow_test
++          POSTGRES_PASSWORD: runner_test_only
++        ports:
++          - 5432:5432
++        options: >-
++          --health-cmd "pg_isready -U orderflow_test -d orderflow_test"
++          --health-interval 3s --health-timeout 3s --health-retries 20
++    env:
++      TEST_DATABASE_URL: postgresql+psycopg://orderflow_test:runner_test_only@127.0.0.1:5432/orderflow_test
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          persist-credentials: false
++      - uses: actions/setup-python@v5
++        with:
++          python-version: '3.12'
++          cache: pip
++      - run: python -m pip install -r requirements-dev.txt
++      - name: Check dependencies, lint, format and tests
++        run: sh scripts/check.sh
++      - uses: actions/upload-artifact@v4
++        if: always()
++        with:
++          name: core-checks-${{ github.sha }}-${{ github.run_attempt }}
++          path: reports/
++          if-no-files-found: warn
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,8 @@
++.venv/
++.env
++.streamlit/secrets.toml
++__pycache__/
++.pytest_cache/
++.ruff_cache/
++reports/
++.DS_Store
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,6 @@
++FROM python:3.12-slim
++WORKDIR /project
++COPY requirements*.txt ./
++RUN python -m pip install --no-cache-dir -r requirements-dev.txt
++COPY . .
++CMD ["sh", "scripts/check.sh"]
+diff --git a/README.md b/README.md
+new file mode 100644
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,66 @@
++# OrderFlow
++
++A campus print-shop customer orders a single catalogue service and follows its progress through collection. Staff confirm an order, start work, mark it ready for pickup and record handover. This repository contains the order service and PostgreSQL baseline for development round R2.
++
++**Review state** — The student accepted R1-01 on 17 November 2026. Candidate R2-01 awaits student acceptance. The two roles in the examples below are fictional fixtures. The interactive Python session is a local acceptance tool with direct access to the service. The authenticated Streamlit application belongs to R3.
++
++## Run the checks
++
++With Docker Compose, from the repository root, run:
++
++```sh
++docker compose run --build --rm checks
++```
++
++For a native run, use Python 3.12 and PostgreSQL 16. With `initdb`, `pg_ctl` and `createdb` on PATH:
++
++```sh
++python3.12 -m venv .venv
++. .venv/bin/activate
++python -m pip install -r requirements-dev.txt
++sh scripts/local-pg.sh sh scripts/check.sh
++```
++
++The native helper starts a private socket-only server, creates the disposable test database and stops the server on exit. An existing dedicated database named `orderflow_test` also works. Set `TEST_DATABASE_URL` and run `sh scripts/check.sh`. Each integration case has its own schema. The quality workflow calls the same check script on pull requests targeting main and pushes to main. Results appear in the run log and its JUnit artifact.
++
++## Try the core by hand
++
++Launch the review shell using one of the following commands. Both start with empty orders and fictional accounts.
++
++```sh
++docker compose run --build --rm -e PYTHONPATH=src checks python -m support.review
++# With the native environment above:
++sh scripts/local-pg.sh env PYTHONPATH=src python -m support.review
++```
++
++Enter one line at a time at the Python prompt:
++
++```python
++order = service.create_order(a, service_id="bw-print", quantity=2)
++order.status, order.version, len(service.get_order(a, order.id).history)
++service.list_orders(b)
++service.get_order(b, order.id)
++service.advance_order(staff, order.id, target="COMPLETED", expected_version=0)
++service.get_order(a, order.id)
++service.advance_order(staff, order.id, target="CONFIRMED", expected_version=0)
++service.advance_order(staff, order.id, target="CONFIRMED", expected_version=0)
++[(e.sequence, e.to_status, e.actor_id) for e in service.get_order(a, order.id).history]
++```
++
++Expect `('PENDING', 0, 1)`, then an empty customer B list. B's detail lookup reports “No accessible order was found.” The premature handover is refused. Re-reading the detail shows the original order with one event. Staff confirmation succeeds once. Replaying version zero reports “This order changed. Refresh before continuing.” The last expression yields two events, from customer A and staff S. Exceptions leave the shell open. Press Ctrl-D to exit and discard this shop.
++
++## Database and source
++
++| Path | Purpose |
++|---|---|
++| `src/orderflow/services.py` | Four service calls, live role checks, per-call transactions and version comparison |
++| `src/orderflow/rules.py` | Input boundaries and four legal forward transitions |
++| `src/orderflow/repository.py` | Scoped queries, row lock, order write and history append |
++| `db/migrations/001_baseline.sql` | User identities, catalogue, orders, history and three fictional catalogue rows |
++| `src/orderflow/db.py` | Connection setup, UTC transaction scope and checksummed migration |
++| `tests/integration/test_transactions.py` | History and commit faults, two-connection contention |
++| `docs/evidence/R2-01/` | Local run, machine-readable results, negative control and candidate file hashes |
++
++To initialise a separate development database, supply its PostgreSQL URL as `DATABASE_URL` and run `PYTHONPATH=src python -m orderflow.db` from the repository root. The migration runs in a transaction and checks its previous checksum before reapplying. It seeds the catalogue. Test identities are created only in the isolated acceptance schemas. Server-side login and credentials are part of the R3 design.
++
++See the [requirements](docs/requirements.md), [test map](docs/test-plan.md), [R1 decision](docs/iterations/R1-01-decision.md) and [R2 acceptance report](docs/iterations/R2-01.md).
+diff --git a/compose.yaml b/compose.yaml
+new file mode 100644
+--- /dev/null
++++ b/compose.yaml
+@@ -0,0 +1,19 @@
++services:
++  db:
++    image: postgres:16
++    environment:
++      POSTGRES_DB: orderflow_test
++      POSTGRES_USER: orderflow_test
++      POSTGRES_PASSWORD: local_test_only
++    healthcheck:
++      test: ["CMD-SHELL", "pg_isready -U orderflow_test -d orderflow_test"]
++      interval: 2s
++      timeout: 3s
++      retries: 25
++  checks:
++    build: .
++    environment:
++      TEST_DATABASE_URL: postgresql+psycopg://orderflow_test:local_test_only@db/orderflow_test
++    depends_on:
++      db:
++        condition: service_healthy
+diff --git a/db/migrations/001_baseline.sql b/db/migrations/001_baseline.sql
+new file mode 100644
+--- /dev/null
++++ b/db/migrations/001_baseline.sql
+@@ -0,0 +1,47 @@
++CREATE TABLE users (
++    id text PRIMARY KEY,
++    username text NOT NULL UNIQUE,
++    role text NOT NULL CHECK (role IN ('CUSTOMER', 'STAFF')),
++    active boolean NOT NULL DEFAULT true
++);
++
++CREATE TABLE service_catalogue (
++    id text PRIMARY KEY,
++    name text NOT NULL CHECK (length(name) > 0),
++    active boolean NOT NULL DEFAULT true
++);
++
++CREATE TYPE order_status AS ENUM ('PENDING', 'CONFIRMED', 'PROCESSING', 'READY_FOR_PICKUP', 'COMPLETED');
++
++CREATE TABLE orders (
++    id uuid PRIMARY KEY,
++    owner_id text NOT NULL REFERENCES users(id),
++    service_id text NOT NULL REFERENCES service_catalogue(id),
++    service_name_snapshot text NOT NULL,
++    quantity integer NOT NULL CHECK (quantity BETWEEN 1 AND 99),
++    note text NOT NULL DEFAULT '' CHECK (char_length(note) <= 500),
++    status order_status NOT NULL DEFAULT 'PENDING',
++    version integer NOT NULL DEFAULT 0 CHECK (version >= 0),
++    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
++    updated_at timestamptz NOT NULL,
++    CHECK (updated_at >= created_at)
++);
++
++CREATE INDEX orders_owner_created_idx ON orders (owner_id, created_at DESC, id);
++
++CREATE TABLE order_history (
++    order_id uuid NOT NULL REFERENCES orders(id),
++    sequence integer NOT NULL CHECK (sequence >= 0),
++    from_status order_status,
++    to_status order_status NOT NULL,
++    actor_id text NOT NULL REFERENCES users(id),
++    occurred_at timestamptz NOT NULL,
++    PRIMARY KEY (order_id, sequence),
++    CHECK ((sequence = 0 AND from_status IS NULL AND to_status = 'PENDING')
++        OR (sequence > 0 AND from_status IS NOT NULL AND from_status <> to_status))
++);
++
++INSERT INTO service_catalogue (id, name, active) VALUES
++    ('bw-print', 'Black and white printing', true),
++    ('colour-print', 'Colour printing', true),
++    ('binding', 'Binding', false);
+diff --git a/pyproject.toml b/pyproject.toml
+new file mode 100644
+--- /dev/null
++++ b/pyproject.toml
+@@ -0,0 +1,11 @@
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++pythonpath = ["src", "."]
++addopts = "--strict-markers"
++
++[tool.ruff]
++target-version = "py312"
++line-length = 100
++
++[tool.ruff.lint]
++select = ["E4", "E7", "E9", "F", "I", "B"]
+diff --git a/requirements-dev.txt b/requirements-dev.txt
+new file mode 100644
+--- /dev/null
++++ b/requirements-dev.txt
+@@ -0,0 +1,7 @@
++-r requirements.txt
++pytest==9.2.0
++ruff==0.17.5
++iniconfig==2.3.1
++packaging==26.3
++pluggy==1.7.0
++Pygments==2.21.0
+diff --git a/requirements.txt b/requirements.txt
+new file mode 100644
+--- /dev/null
++++ b/requirements.txt
+@@ -0,0 +1,4 @@
++SQLAlchemy==2.0.58
++psycopg[binary]==3.3.9
++typing_extensions==4.16.0
++greenlet==3.2.4 ; platform_machine == "x86_64" or platform_machine == "AMD64" or platform_machine == "aarch64"
+diff --git a/scripts/check.sh b/scripts/check.sh
+new file mode 100644
+--- /dev/null
++++ b/scripts/check.sh
+@@ -0,0 +1,7 @@
++#!/bin/sh
++set -eu
++mkdir -p reports
++python -m pip check
++python -m ruff check .
++python -m ruff format --check .
++python -m pytest -q -rA --junitxml=reports/junit.xml "$@"
+diff --git a/scripts/local-pg.sh b/scripts/local-pg.sh
+new file mode 100644
+--- /dev/null
++++ b/scripts/local-pg.sh
+@@ -0,0 +1,27 @@
++#!/bin/sh
++# Run a command from the project root against its own socket-only PostgreSQL cluster.
++set -eu
++if [ "$#" -eq 0 ]; then
++    echo "Usage: sh scripts/local-pg.sh COMMAND [ARGUMENT ...]" >&2
++    exit 2
++fi
++for binary in initdb pg_ctl createdb; do
++    command -v "$binary" >/dev/null || { echo "Missing PostgreSQL tool: $binary" >&2; exit 2; }
++done
++scratch=$(mktemp -d /tmp/orderflow.XXXXXXXX)
++cleanup() {
++    if [ -f "$scratch/data/postmaster.pid" ]; then
++        pg_ctl -D "$scratch/data" -m fast -w stop >/dev/null || return
++    fi
++    rm -rf "$scratch"
++}
++trap cleanup EXIT
++trap 'exit 130' INT
++trap 'exit 143' TERM
++initdb -D "$scratch/data" -U orderflow_test --auth-local=trust --auth-host=reject \
++    --no-locale --encoding=UTF8 > "$scratch/init.log"
++pg_ctl -D "$scratch/data" -l "$scratch/server.log" -w \
++    -o "-c listen_addresses='' -c unix_socket_directories='$scratch' -c timezone=UTC" start >/dev/null
++createdb -h "$scratch" -U orderflow_test orderflow_test
++export TEST_DATABASE_URL="postgresql+psycopg://orderflow_test@/orderflow_test?host=$scratch"
++"$@"
+diff --git a/src/orderflow/__init__.py b/src/orderflow/__init__.py
+new file mode 100644
+--- /dev/null
++++ b/src/orderflow/__init__.py
+@@ -0,0 +1 @@
++"""OrderFlow print-shop order tracking."""
+diff --git a/src/orderflow/db.py b/src/orderflow/db.py
+new file mode 100644
+--- /dev/null
++++ b/src/orderflow/db.py
+@@ -0,0 +1,71 @@
++"""Connect to PostgreSQL and apply the baseline as an explicit deployment step."""
++
++import hashlib
++import os
++from contextlib import contextmanager
++from pathlib import Path
++
++from sqlalchemy import create_engine, text
++from sqlalchemy.engine import Engine, make_url
++from sqlalchemy.exc import SQLAlchemyError
++
++from .models import OrderError
++
++MIGRATION = Path(__file__).resolve().parents[2] / "db/migrations/001_baseline.sql"
++
++
++def open_engine(url: str, **options) -> Engine:
++    parsed = make_url(url)
++    if parsed.drivername not in {"postgresql", "postgresql+psycopg"}:
++        raise ValueError("OrderFlow requires PostgreSQL with the psycopg driver.")
++    return create_engine(
++        parsed.set(drivername="postgresql+psycopg"),
++        isolation_level="READ COMMITTED",
++        hide_parameters=True,
++        **options,
++    )
++
++
++@contextmanager
++def transaction(engine: Engine):
++    try:
++        with engine.begin() as connection:
++            connection.exec_driver_sql("SET LOCAL TIME ZONE 'UTC'")
++            yield connection
++    except SQLAlchemyError:
++        raise OrderError(
++            "PERSISTENCE_ERROR",
++            "The operation could not be confirmed. Refresh and check the order.",
++        ) from None
++
++
++def migrate(engine: Engine) -> None:
++    sql = MIGRATION.read_bytes()
++    digest = hashlib.sha256(sql).hexdigest()
++    with engine.begin() as connection:
++        connection.execute(text("SELECT pg_advisory_xact_lock(5401, 1)"))
++        connection.exec_driver_sql(
++            "CREATE TABLE IF NOT EXISTS schema_migrations "
++            "(name text PRIMARY KEY, sha256 text NOT NULL)"
++        )
++        applied = connection.execute(
++            text("SELECT sha256 FROM schema_migrations WHERE name = :name"),
++            {"name": MIGRATION.name},
++        ).scalar_one_or_none()
++        if applied is None:
++            connection.exec_driver_sql(sql.decode("utf-8"))
++            connection.execute(
++                text("INSERT INTO schema_migrations VALUES (:name, :digest)"),
++                {"name": MIGRATION.name, "digest": digest},
++            )
++        elif applied != digest:
++            raise RuntimeError("The installed baseline differs from the migration file.")
++
++
++if __name__ == "__main__":
++    engine = open_engine(os.environ["DATABASE_URL"])
++    try:
++        migrate(engine)
++        print("OrderFlow baseline is ready.")
++    finally:
++        engine.dispose()
+diff --git a/src/orderflow/models.py b/src/orderflow/models.py
+new file mode 100644
+--- /dev/null
++++ b/src/orderflow/models.py
+@@ -0,0 +1,47 @@
++from dataclasses import dataclass
++from datetime import datetime
++from uuid import UUID
++
++
++class OrderError(Exception):
++    """Public error with a stable code and a message suitable for the caller."""
++
++    def __init__(self, code: str, message: str):
++        super().__init__(message)
++        self.code = code
++
++
++@dataclass(frozen=True)
++class Principal:
++    """User ID supplied by a trusted server-side authentication adapter."""
++
++    user_id: str
++
++
++@dataclass(frozen=True)
++class Order:
++    id: UUID
++    owner_id: str
++    service_id: str
++    service_name_snapshot: str
++    quantity: int
++    note: str
++    status: str
++    version: int
++    created_at: datetime
++    updated_at: datetime
++
++
++@dataclass(frozen=True)
++class Event:
++    sequence: int
++    from_status: str | None
++    to_status: str
++    actor_id: str
++    occurred_at: datetime
++
++
++@dataclass(frozen=True)
++class OrderDetail:
++    order: Order
++    history: tuple[Event, ...]
+diff --git a/src/orderflow/repository.py b/src/orderflow/repository.py
+new file mode 100644
+--- /dev/null
++++ b/src/orderflow/repository.py
+@@ -0,0 +1,122 @@
++"""Parameterized statements. The caller owns the transaction."""
++
++from uuid import UUID, uuid4
++
++from sqlalchemy import text
++from sqlalchemy.engine import Connection
++
++from .models import Event, Order, OrderDetail, OrderError
++
++
++def active_role(db: Connection, user_id: str) -> str | None:
++    return db.execute(
++        text("SELECT role FROM users WHERE id = :id AND active FOR SHARE"),
++        {"id": user_id},
++    ).scalar_one_or_none()
++
++
++def create(db: Connection, owner_id: str, service_id: str, quantity: int, note: str) -> Order:
++    service_name = db.execute(
++        text("SELECT name FROM service_catalogue WHERE id = :id AND active FOR SHARE"),
++        {"id": service_id},
++    ).scalar_one_or_none()
++    if service_name is None:
++        raise OrderError("INVALID_INPUT", "Select an available catalogue service.")
++    row = (
++        db.execute(
++            text("""
++            INSERT INTO orders
++                (id, owner_id, service_id, service_name_snapshot, quantity, note, created_at, updated_at)
++            VALUES (:id, :owner, :service, :name, :quantity, :note, statement_timestamp(),
++                    statement_timestamp())
++            RETURNING *
++        """),
++            {
++                "id": uuid4(),
++                "owner": owner_id,
++                "service": service_id,
++                "name": service_name,
++                "quantity": quantity,
++                "note": note,
++            },
++        )
++        .mappings()
++        .one()
++    )
++    return Order(**row)
++
++
++def append_event(db: Connection, order: Order, previous: str | None, actor_id: str) -> None:
++    db.execute(
++        text("""
++            INSERT INTO order_history (order_id, sequence, from_status, to_status, actor_id, occurred_at)
++            VALUES (:id, :version, :previous, :status, :actor, :occurred)
++        """),
++        {
++            "id": order.id,
++            "version": order.version,
++            "previous": previous,
++            "status": order.status,
++            "actor": actor_id,
++            "occurred": order.updated_at,
++        },
++    )
++
++
++def not_found() -> OrderError:
++    return OrderError("NOT_FOUND", "No accessible order was found.")
++
++
++def list_visible(db: Connection, owner_id: str | None) -> list[Order]:
++    scope = "" if owner_id is None else "WHERE o.owner_id = :owner"
++    sql = f"SELECT o.* FROM orders o {scope} ORDER BY o.created_at DESC, o.id"
++    rows = db.execute(text(sql), {"owner": owner_id}).mappings()
++    return [Order(**row) for row in rows]
++
++
++def detail(db: Connection, order_id: UUID, owner_id: str | None) -> OrderDetail:
++    scope = "" if owner_id is None else "AND o.owner_id = :owner"
++    rows = (
++        db.execute(
++            text(f"""
++            SELECT o.*, h.sequence, h.from_status, h.to_status, h.actor_id, h.occurred_at
++            FROM orders o JOIN order_history h ON h.order_id = o.id
++            WHERE o.id = :id {scope} ORDER BY h.sequence
++        """),
++            {"id": order_id, "owner": owner_id},
++        )
++        .mappings()
++        .all()
++    )
++    if not rows:
++        raise not_found()
++    order = Order(**{key: rows[0][key] for key in Order.__dataclass_fields__})
++    history = tuple(Event(**{key: row[key] for key in Event.__dataclass_fields__}) for row in rows)
++    return OrderDetail(order, history)
++
++
++def lock_order(db: Connection, order_id: UUID) -> Order:
++    row = (
++        db.execute(text("SELECT * FROM orders WHERE id = :id FOR UPDATE"), {"id": order_id})
++        .mappings()
++        .one_or_none()
++    )
++    if row is None:
++        raise not_found()
++    return Order(**row)
++
++
++def advance(db: Connection, order_id: UUID, target: str) -> Order:
++    row = (
++        db.execute(
++            text("""
++            UPDATE orders SET status = :target, version = version + 1,
++                updated_at = GREATEST(clock_timestamp(), updated_at)
++            WHERE id = :id RETURNING *
++        """),
++            {"target": target, "id": order_id},
++        )
++        .mappings()
++        .one()
++    )
++    return Order(**row)
+diff --git a/src/orderflow/rules.py b/src/orderflow/rules.py
+new file mode 100644
+--- /dev/null
++++ b/src/orderflow/rules.py
+@@ -0,0 +1,46 @@
++from uuid import UUID
++
++from .models import OrderError
++
++NEXT_STATUS = {
++    "PENDING": "CONFIRMED",
++    "CONFIRMED": "PROCESSING",
++    "PROCESSING": "READY_FOR_PICKUP",
++    "READY_FOR_PICKUP": "COMPLETED",
++}
++
++
++def validate_text(value: object, label: str) -> None:
++    if not isinstance(value, str) or "\x00" in value:
++        raise OrderError("INVALID_INPUT", f"Enter valid text for {label}.")
++    try:
++        value.encode("utf-8")
++    except UnicodeEncodeError:
++        raise OrderError("INVALID_INPUT", f"Enter valid text for {label}.") from None
++
++
++def validate_creation(service_id: str, quantity: int, note: str) -> None:
++    validate_text(service_id, "the service")
++    if not service_id.strip():
++        raise OrderError("INVALID_INPUT", "Select a catalogue service.")
++    if type(quantity) is not int or not 1 <= quantity <= 99:
++        raise OrderError("INVALID_INPUT", "Enter a whole quantity from 1 to 99.")
++    validate_text(note, "the note")
++    if len(note) > 500:
++        raise OrderError("INVALID_INPUT", "Use at most 500 characters for the note.")
++
++
++def validate_order_id(order_id: UUID) -> None:
++    if not isinstance(order_id, UUID):
++        raise OrderError("INVALID_INPUT", "Use a valid order ID.")
++
++
++def validate_update(target: str, expected_version: int) -> None:
++    validate_text(target, "the target status")
++    if type(expected_version) is not int or expected_version < 0:
++        raise OrderError("INVALID_INPUT", "Use a non-negative whole version.")
++
++
++def check_transition(current: str, target: str) -> None:
++    if current not in NEXT_STATUS or NEXT_STATUS[current] != target:
++        raise OrderError("INVALID_TRANSITION", "Choose the next processing stage.")
+diff --git a/src/orderflow/services.py b/src/orderflow/services.py
+new file mode 100644
+--- /dev/null
++++ b/src/orderflow/services.py
+@@ -0,0 +1,72 @@
++"""Server-side order operations. R3 will supply the authenticated principal."""
++
++from uuid import UUID
++
++from sqlalchemy.engine import Connection, Engine
++
++from . import repository, rules
++from .db import transaction
++from .models import Order, OrderDetail, OrderError, Principal
++
++
++def _role(db: Connection, principal: Principal | None) -> str:
++    if isinstance(principal, Principal) and isinstance(principal.user_id, str):
++        try:
++            rules.validate_text(principal.user_id, "the identity")
++        except OrderError:
++            pass
++        else:
++            role = repository.active_role(db, principal.user_id)
++            if role is not None:
++                return role
++    raise OrderError("UNAUTHENTICATED", "Sign in with an active account.")
++
++
++def _require_role(actual: str, required: str) -> None:
++    if actual != required:
++        raise OrderError("FORBIDDEN", "Your account cannot perform this operation.")
++
++
++class OrderService:
++    def __init__(self, engine: Engine):
++        self.engine = engine
++
++    def create_order(
++        self, principal: Principal | None, *, service_id: str, quantity: int, note: str = ""
++    ) -> Order:
++        with transaction(self.engine) as db:
++            role = _role(db, principal)
++            rules.validate_creation(service_id, quantity, note)
++            _require_role(role, "CUSTOMER")
++            order = repository.create(db, principal.user_id, service_id, quantity, note)
++            repository.append_event(db, order, None, principal.user_id)
++            return order
++
++    def list_orders(self, principal: Principal | None) -> list[Order]:
++        with transaction(self.engine) as db:
++            role = _role(db, principal)
++            return repository.list_visible(db, principal.user_id if role == "CUSTOMER" else None)
++
++    def get_order(self, principal: Principal | None, order_id: UUID) -> OrderDetail:
++        with transaction(self.engine) as db:
++            role = _role(db, principal)
++            rules.validate_order_id(order_id)
++            return repository.detail(
++                db, order_id, principal.user_id if role == "CUSTOMER" else None
++            )
++
++    def advance_order(
++        self, principal: Principal | None, order_id: UUID, *, target: str, expected_version: int
++    ) -> Order:
++        with transaction(self.engine) as db:
++            role = _role(db, principal)
++            rules.validate_order_id(order_id)
++            rules.validate_update(target, expected_version)
++            _require_role(role, "STAFF")
++            current = repository.lock_order(db, order_id)
++            if expected_version != current.version:
++                raise OrderError("STALE_VERSION", "This order changed. Refresh before continuing.")
++            rules.check_transition(current.status, target)
++            updated = repository.advance(db, order_id, target)
++            repository.append_event(db, updated, current.status, principal.user_id)
++            return updated
+diff --git a/support/__init__.py b/support/__init__.py
+new file mode 100644
+--- /dev/null
++++ b/support/__init__.py
+@@ -0,0 +1 @@
++"""Disposable data for tests and the local acceptance exercise."""
+diff --git a/support/review.py b/support/review.py
+new file mode 100644
+--- /dev/null
++++ b/support/review.py
+@@ -0,0 +1,26 @@
++"""Let a reviewer call the public order service in an isolated fictional shop."""
++
++import code
++
++from orderflow.models import Principal
++from orderflow.services import OrderService
++from support.sandbox import sandbox_database
++
++
++def main():
++    with sandbox_database() as db:
++        namespace = {
++            "service": OrderService(db),
++            "a": Principal("customer-a"),
++            "b": Principal("customer-b"),
++            "staff": Principal("staff-s"),
++        }
++        code.interact(
++            banner="OrderFlow R2 review. Use service, a, b and staff. See README.md for actions.",
++            local=namespace,
++            exitmsg="Review finished. Discarding this temporary shop.",
++        )
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/support/sandbox.py b/support/sandbox.py
+new file mode 100644
+--- /dev/null
++++ b/support/sandbox.py
+@@ -0,0 +1,41 @@
++import os
++from contextlib import contextmanager
++from uuid import uuid4
++
++from sqlalchemy.engine import make_url
++from sqlalchemy.pool import NullPool
++
++from orderflow.db import migrate, open_engine
++
++
++@contextmanager
++def sandbox_database():
++    url = os.environ.get("TEST_DATABASE_URL")
++    if not url or make_url(url).database != "orderflow_test":
++        raise RuntimeError(
++            "Set TEST_DATABASE_URL to a dedicated PostgreSQL database named orderflow_test."
++        )
++    schema = f"test_{uuid4().hex}"
++    admin = open_engine(url, poolclass=NullPool)
++    engine = open_engine(
++        url, poolclass=NullPool, connect_args={"options": f"-c search_path={schema}"}
++    )
++    with admin.begin() as db:
++        db.exec_driver_sql(f"CREATE SCHEMA {schema}")
++    try:
++        migrate(engine)
++        with engine.begin() as db:
++            db.exec_driver_sql("""
++                INSERT INTO users (id, username, role, active) VALUES
++                  ('customer-a', 'alex', 'CUSTOMER', true),
++                  ('customer-b', 'blair', 'CUSTOMER', true),
++                  ('staff-s', 'sam', 'STAFF', true),
++                  ('staff-t', 'taylor', 'STAFF', true),
++                  ('inactive', 'inactive', 'STAFF', false)
++            """)
++        yield engine
++    finally:
++        engine.dispose()
++        with admin.begin() as db:
++            db.exec_driver_sql(f"DROP SCHEMA {schema} CASCADE")
++        admin.dispose()
+diff --git a/tests/integration/conftest.py b/tests/integration/conftest.py
+new file mode 100644
+--- /dev/null
++++ b/tests/integration/conftest.py
+@@ -0,0 +1,15 @@
++import pytest
++
++from orderflow.services import OrderService
++from support.sandbox import sandbox_database
++
++
++@pytest.fixture
++def database():
++    with sandbox_database() as engine:
++        yield engine
++
++
++@pytest.fixture
++def service(database):
++    return OrderService(database)
+diff --git a/tests/integration/test_orders.py b/tests/integration/test_orders.py
+new file mode 100644
+--- /dev/null
++++ b/tests/integration/test_orders.py
+@@ -0,0 +1,242 @@
++from contextlib import contextmanager
++from datetime import timedelta
++from uuid import UUID, uuid4
++
++import pytest
++
++from orderflow.db import migrate
++from orderflow.models import OrderError, Principal
++from orderflow.services import OrderService
++
++A = Principal("customer-a")
++B = Principal("customer-b")
++S = Principal("staff-s")
++FLOW = ["PENDING", "CONFIRMED", "PROCESSING", "READY_FOR_PICKUP", "COMPLETED"]
++
++
++@contextmanager
++def rejected(code):
++    with pytest.raises(OrderError) as error:
++        yield
++    assert error.value.code == code
++
++
++def create(service, who=A):
++    return service.create_order(who, service_id="bw-print", quantity=2)
++
++
++def counts(engine):
++    with engine.connect() as db:
++        return tuple(
++            db.exec_driver_sql(
++                "SELECT (SELECT count(*) FROM orders), (SELECT count(*) FROM order_history)"
++            ).one()
++        )
++
++
++def test_t01_t09_creation_and_history(service):
++    order = create(service)
++    assert isinstance(order.id, UUID)
++    assert order.id != create(service).id
++    assert (order.owner_id, order.service_id, order.service_name_snapshot) == (
++        "customer-a",
++        "bw-print",
++        "Black and white printing",
++    )
++    assert (order.quantity, order.note, order.status, order.version) == (2, "", "PENDING", 0)
++    detail = service.get_order(A, order.id)
++    assert detail.order == order
++    (event,) = detail.history
++    assert (event.sequence, event.from_status, event.to_status, event.actor_id) == (
++        0,
++        None,
++        "PENDING",
++        "customer-a",
++    )
++    assert event.occurred_at == order.created_at == order.updated_at
++    assert event.occurred_at.utcoffset() == timedelta(0)
++
++
++@pytest.mark.parametrize("quantity,note", [(1, ""), (99, "🌱" * 500)])
++def test_t02_accept_boundaries_in_db(service, quantity, note):
++    order = service.create_order(A, service_id="colour-print", quantity=quantity, note=note)
++    stored = service.get_order(A, order.id)
++    assert (stored.order.quantity, stored.order.note, len(stored.history)) == (quantity, note, 1)
++
++
++@pytest.mark.parametrize(
++    "field,value",
++    [
++        ("quantity", 0),
++        ("quantity", 100),
++        ("quantity", 1.5),
++        ("quantity", True),
++        ("note", "x" * 501),
++        ("service_id", "binding"),
++        ("service_id", "missing"),
++        ("service_id", ""),
++        ("service_id", None),
++    ],
++)
++def test_t02_t03_rejection_leaves_both_tables_empty(service, database, field, value):
++    payload = {"service_id": "bw-print", "quantity": 2, field: value}
++    with rejected("INVALID_INPUT"):
++        service.create_order(A, **payload)
++    assert counts(database) == (0, 0)
++
++
++def test_t03_snapshot_from_catalogue(service, database):
++    first = create(service)
++    with database.begin() as db:
++        db.exec_driver_sql(
++            "UPDATE service_catalogue SET name='Monochrome printing' WHERE id='bw-print'"
++        )
++    assert service.get_order(A, first.id).order.service_name_snapshot == "Black and white printing"
++    assert create(service).service_name_snapshot == "Monochrome printing"
++
++
++def test_t04_t12_trusted_identity_fields(service, database):
++    for field, value in [
++        ("owner_id", B.user_id),
++        ("role", "STAFF"),
++        ("service_name_snapshot", "Other"),
++    ]:
++        with pytest.raises(TypeError):
++            service.create_order(A, service_id="bw-print", quantity=2, **{field: value})
++    with rejected("FORBIDDEN"):
++        create(service, S)
++    assert counts(database) == (0, 0)
++    order = create(service)
++    original = service.get_order(A, order.id)
++    for customer in [A, B]:
++        with rejected("FORBIDDEN"):
++            service.advance_order(customer, order.id, target="CONFIRMED", expected_version=0)
++    assert service.get_order(A, order.id) == original
++
++
++def test_t05_t06_t07_scoped_lists_details_and_histories(service):
++    first, second = create(service, A), create(service, B)
++    assert service.list_orders(A) == [first]
++    assert service.list_orders(B) == [second]
++    assert set(service.list_orders(S)) == {first, second}
++    for owner, order in [(A, first), (B, second)]:
++        assert service.get_order(S, order.id) == service.get_order(owner, order.id)
++    errors = []
++    for order_id in [first.id, uuid4()]:
++        with pytest.raises(OrderError) as error:
++            service.get_order(B, order_id)
++        errors.append((error.value.code, str(error.value)))
++    assert errors == [("NOT_FOUND", "No accessible order was found.")] * 2
++
++
++@pytest.mark.parametrize(
++    "actor", [None, Principal("unknown"), Principal("inactive"), Principal("")]
++)
++def test_t08_invalid_identity(service, database, actor):
++    order = create(service)
++    for operation in [
++        lambda: create(service, actor),
++        lambda: service.list_orders(actor),
++        lambda: service.get_order(actor, order.id),
++        lambda: service.advance_order(actor, order.id, target="CONFIRMED", expected_version=0),
++    ]:
++        with rejected("UNAUTHENTICATED"):
++            operation()
++    assert counts(database) == (1, 1)
++    assert service.get_order(A, order.id).order == order
++
++
++def test_t08_role_and_activation_rechecked_each_call(service, database):
++    order = create(service)
++    assert service.get_order(S, order.id).order == order
++    with database.begin() as db:
++        db.exec_driver_sql("UPDATE users SET active=false WHERE id='staff-s'")
++    with rejected("UNAUTHENTICATED"):
++        service.advance_order(S, order.id, target="CONFIRMED", expected_version=0)
++    assert (counts(database), service.get_order(A, order.id).order) == ((1, 1), order)
++
++
++def test_t10_full_lifecycle(service):
++    order = create(service)
++    for version, target in enumerate(FLOW[1:], start=1):
++        updated = service.advance_order(S, order.id, target=target, expected_version=version - 1)
++        detail = service.get_order(A, order.id)
++        assert detail.order == updated
++        assert (updated.status, updated.version) == (target, version)
++        assert [e.sequence for e in detail.history] == list(range(version + 1))
++        assert [e.from_status for e in detail.history] == [None, *FLOW[:version]]
++        assert [e.to_status for e in detail.history] == FLOW[: version + 1]
++        assert [e.actor_id for e in detail.history] == [A.user_id, *[S.user_id] * version]
++        assert all(e.occurred_at.utcoffset() == timedelta(0) for e in detail.history)
++        assert detail.history[-1].occurred_at == updated.updated_at
++        print(f"{updated.status} | version={version} | history={len(detail.history)}")
++
++
++@pytest.mark.parametrize(
++    "stage,target",
++    [
++        (0, "PROCESSING"),
++        (1, "COMPLETED"),
++        (1, "PENDING"),
++        (1, "CONFIRMED"),
++        (1, "UNKNOWN"),
++        (4, "CONFIRMED"),
++    ],
++)
++def test_t11_t13_rejected_transitions_preserve_every_field(service, stage, target):
++    order = create(service)
++    for version in range(stage):
++        service.advance_order(S, order.id, target=FLOW[version + 1], expected_version=version)
++    before = service.get_order(A, order.id)
++    with rejected("INVALID_TRANSITION"):
++        service.advance_order(S, order.id, target=target, expected_version=stage)
++    assert service.get_order(A, order.id) == before
++
++
++def test_t14_replay_returns_refresh_before_edge_check(service):
++    order = create(service)
++    service.advance_order(S, order.id, target="CONFIRMED", expected_version=0)
++    before = service.get_order(A, order.id)
++    with pytest.raises(OrderError) as error:
++        service.advance_order(S, order.id, target="CONFIRMED", expected_version=0)
++    assert error.value.code == "STALE_VERSION"
++    assert "refresh" in str(error.value).lower()
++    assert service.get_order(A, order.id) == before
++
++
++def test_t18_orders_stay_independent(service):
++    a, b = create(service, A), create(service, B)
++    before = service.get_order(B, b.id)
++    service.advance_order(S, a.id, target="CONFIRMED", expected_version=0)
++    service.advance_order(S, a.id, target="PROCESSING", expected_version=1)
++    assert service.get_order(B, b.id) == before
++    service.advance_order(Principal("staff-t"), b.id, target="CONFIRMED", expected_version=0)
++    assert [e.actor_id for e in service.get_order(B, b.id).history] == ["customer-b", "staff-t"]
++    assert [e.actor_id for e in service.get_order(A, a.id).history] == [
++        "customer-a",
++        "staff-s",
++        "staff-s",
++    ]
++
++
++def test_t19_reopen_database_and_rerun_migration(service, database):
++    order = create(service)
++    service.advance_order(S, order.id, target="CONFIRMED", expected_version=0)
++    expected = service.get_order(A, order.id)
++    database.dispose()
++    migrate(database)
++    assert OrderService(database).get_order(A, order.id) == expected
++    with database.connect() as db:
++        assert db.exec_driver_sql("SELECT count(*) FROM schema_migrations").scalar_one() == 1
++
++
++def test_invalid_reference_and_version_preserve_order(service):
++    order = create(service)
++    before = service.get_order(A, order.id)
++    with rejected("INVALID_INPUT"):
++        service.get_order(A, "invalid-id")
++    with rejected("INVALID_INPUT"):
++        service.advance_order(S, order.id, target="CONFIRMED", expected_version=True)
++    with rejected("NOT_FOUND"):
++        service.advance_order(S, uuid4(), target="CONFIRMED", expected_version=0)
++    assert service.get_order(A, order.id) == before
+diff --git a/tests/integration/test_transactions.py b/tests/integration/test_transactions.py
+new file mode 100644
+--- /dev/null
++++ b/tests/integration/test_transactions.py
+@@ -0,0 +1,101 @@
++from concurrent.futures import ThreadPoolExecutor
++from threading import Barrier
++
++import pytest
++from sqlalchemy import event
++
++from orderflow.models import OrderError, Principal
++
++A = Principal("customer-a")
++S = Principal("staff-s")
++
++
++def confirmed_order(service):
++    order = service.create_order(A, service_id="bw-print", quantity=2)
++    return service.advance_order(S, order.id, target="CONFIRMED", expected_version=0)
++
++
++@pytest.mark.parametrize("operation", ["advance", "create"])
++@pytest.mark.parametrize("stage", ["before_history_insert", "at_commit"])
++def test_t15_t16_atomic_failure(service, database, operation, stage):
++    order = confirmed_order(service)
++    before = service.get_order(A, order.id)
++    trigger = (
++        "CREATE TRIGGER fail_write BEFORE INSERT ON order_history"
++        if stage == "before_history_insert"
++        else "CREATE CONSTRAINT TRIGGER fail_write AFTER INSERT ON order_history "
++        "DEFERRABLE INITIALLY DEFERRED"
++    )
++    with database.begin() as db:
++        # PostgreSQL sequence increments survive rollback and prove the fault was reached.
++        db.exec_driver_sql("CREATE SEQUENCE fault_hits")
++        db.exec_driver_sql("""
++            CREATE FUNCTION fail_history() RETURNS trigger LANGUAGE plpgsql AS $$
++            BEGIN
++                PERFORM nextval('fault_hits');
++                RAISE EXCEPTION 'Test-only storage interruption';
++            END $$;
++        """)
++        db.exec_driver_sql(f"{trigger} FOR EACH ROW EXECUTE FUNCTION fail_history()")
++    with pytest.raises(OrderError) as failure:
++        if operation == "advance":
++            service.advance_order(S, order.id, target="PROCESSING", expected_version=1)
++        else:
++            service.create_order(A, service_id="colour-print", quantity=3)
++    assert failure.value.code == "PERSISTENCE_ERROR"
++    assert "Test-only" not in str(failure.value)
++    assert service.get_order(A, order.id) == before
++    with database.connect() as db:
++        observed = tuple(
++            db.exec_driver_sql("""
++            SELECT (SELECT count(*) FROM orders), (SELECT count(*) FROM order_history),
++                   (SELECT is_called FROM fault_hits), (SELECT last_value FROM fault_hits)
++        """).one()
++        )
++    assert observed == (1, 2, True, 1)
++    print(
++        f"{operation} / {stage} | error={failure.value.code} | "
++        f"orders={observed[0]} | history={observed[1]} | state=CONFIRMED | version=1"
++    )
++
++
++def test_t17_two_connections_one_commit(service, database):
++    order = confirmed_order(service)
++    ready = Barrier(2, timeout=8)
++
++    def rendezvous(db, cursor, statement, parameters, context, executemany):
++        # Both real connections must reach the row lock before either can finish.
++        if "FROM orders WHERE id" in statement and "FOR UPDATE" in statement:
++            ready.wait()
++
++    def worker(staff):
++        seen = service.get_order(staff, order.id).order
++        assert (seen.status, seen.version) == ("CONFIRMED", 1)
++        try:
++            service.advance_order(
++                staff, order.id, target="PROCESSING", expected_version=seen.version
++            )
++        except OrderError as error:
++            return staff.user_id, error.code
++        return staff.user_id, "COMMITTED"
++
++    event.listen(database, "before_cursor_execute", rendezvous)
++    try:
++        with ThreadPoolExecutor(max_workers=2) as pool:
++            results = list(pool.map(worker, [S, Principal("staff-t")]))
++    finally:
++        event.remove(database, "before_cursor_execute", rendezvous)
++    (winner,) = [actor for actor, result in results if result == "COMMITTED"]
++    assert sorted(result for _, result in results) == ["COMMITTED", "STALE_VERSION"]
++    final = service.get_order(A, order.id)
++    assert (final.order.status, final.order.version, len(final.history)) == ("PROCESSING", 2, 3)
++    assert [e.sequence for e in final.history] == [0, 1, 2]
++    assert (
++        final.history[-1].from_status,
++        final.history[-1].to_status,
++        final.history[-1].actor_id,
++    ) == ("CONFIRMED", "PROCESSING", winner)
++    print(
++        f"Workers={dict(results)} | status={final.order.status} | version={final.order.version} "
++        f"| history={len(final.history)}"
++    )
+diff --git a/tests/unit/test_rules.py b/tests/unit/test_rules.py
+new file mode 100644
+--- /dev/null
++++ b/tests/unit/test_rules.py
+@@ -0,0 +1,46 @@
++from itertools import product
++
++import pytest
++
++from orderflow.models import OrderError
++from orderflow.rules import check_transition, validate_creation, validate_update
++
++# R1-01 is the oracle. Keep the expected flow independent of the implementation table.
++STAGES = ["PENDING", "CONFIRMED", "PROCESSING", "READY_FOR_PICKUP", "COMPLETED"]
++
++
++@pytest.mark.parametrize("quantity", [1, 99])
++@pytest.mark.parametrize("note", ["", "x" * 500])
++def test_t02_accept_boundaries(quantity, note):
++    validate_creation("bw-print", quantity, note)
++
++
++@pytest.mark.parametrize("quantity", [0, 100, -1, True, False, 1.5, None, "2"])
++def test_t02_reject_quantity(quantity):
++    with pytest.raises(OrderError) as error:
++        validate_creation("bw-print", quantity, "")
++    assert error.value.code == "INVALID_INPUT"
++
++
++@pytest.mark.parametrize("note", ["x" * 501, 1, None, "broken\x00text", "\ud800"])
++def test_t02_reject_note(note):
++    with pytest.raises(OrderError) as error:
++        validate_creation("bw-print", 1, note)
++    assert error.value.code == "INVALID_INPUT"
++
++
++@pytest.mark.parametrize("current,target", list(product(STAGES, [*STAGES, "UNKNOWN"])))
++def test_t10_t11_t13_transition_matrix(current, target):
++    if (current, target) in list(zip(STAGES[:-1], STAGES[1:], strict=True)):
++        check_transition(current, target)
++    else:
++        with pytest.raises(OrderError) as error:
++            check_transition(current, target)
++        assert error.value.code == "INVALID_TRANSITION"
++
++
++@pytest.mark.parametrize("version", [None, True, -1, "0", 0.5])
++def test_invalid_version(version):
++    with pytest.raises(OrderError) as error:
++        validate_update("CONFIRMED", version)
++    assert error.value.code == "INVALID_INPUT"

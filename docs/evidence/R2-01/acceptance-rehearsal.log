@@ -1,0 +1,143 @@
+AI rehearsal of the R2-01 acceptance instructions
+Executed at 2026-11-17T01:55:54.271398+00:00
+Student observation and decision remain PENDING.
+Core source is unchanged from the attached source.sha256 manifest.
+
+Focused evidence command
+sh scripts/local-pg.sh python -m pytest tests/integration/test_transactions.py tests/integration/test_orders.py::test_t19_reopen_database_and_rerun_migration -q -rA
+......                                                                   [100%]
+==================================== PASSES ====================================
+__________ test_t15_t16_atomic_failure[before_history_insert-advance] __________
+----------------------------- Captured stdout call -----------------------------
+advance / before_history_insert | error=PERSISTENCE_ERROR | orders=1 | history=2 | state=CONFIRMED | version=1
+__________ test_t15_t16_atomic_failure[before_history_insert-create] ___________
+----------------------------- Captured stdout call -----------------------------
+create / before_history_insert | error=PERSISTENCE_ERROR | orders=1 | history=2 | state=CONFIRMED | version=1
+________________ test_t15_t16_atomic_failure[at_commit-advance] ________________
+----------------------------- Captured stdout call -----------------------------
+advance / at_commit | error=PERSISTENCE_ERROR | orders=1 | history=2 | state=CONFIRMED | version=1
+________________ test_t15_t16_atomic_failure[at_commit-create] _________________
+----------------------------- Captured stdout call -----------------------------
+create / at_commit | error=PERSISTENCE_ERROR | orders=1 | history=2 | state=CONFIRMED | version=1
+_____________________ test_t17_two_connections_one_commit ______________________
+----------------------------- Captured stdout call -----------------------------
+Workers={'staff-s': 'STALE_VERSION', 'staff-t': 'COMMITTED'} | status=PROCESSING | version=2 | history=3
+=========================== short test summary info ============================
+PASSED tests/integration/test_transactions.py::test_t15_t16_atomic_failure[before_history_insert-advance]
+PASSED tests/integration/test_transactions.py::test_t15_t16_atomic_failure[before_history_insert-create]
+PASSED tests/integration/test_transactions.py::test_t15_t16_atomic_failure[at_commit-advance]
+PASSED tests/integration/test_transactions.py::test_t15_t16_atomic_failure[at_commit-create]
+PASSED tests/integration/test_transactions.py::test_t17_two_connections_one_commit
+PASSED tests/integration/test_orders.py::test_t19_reopen_database_and_rerun_migration
+6 passed in 0.26s
+Exit code 0
+
+Interactive instructions executed in the listed order
+stdout
+>>> >>> >>> ('customer-a', 'PENDING', 0, 1)
+>>> [(0, None, 'PENDING', 'customer-a')]
+>>> >>> >>> (1, 99, 500)
+>>> >>> >>> >>> >>> >>> >>> >>> (3, 3)
+>>> >>> (['customer-a', 'customer-a', 'customer-a'], ['customer-b'])
+>>> ('customer-a', 'customer-b')
+>>> >>> >>> >>> (0, 1, 4)
+>>> >>> >>> True
+>>> >>> ('CONFIRMED', 1, 2)
+>>> >>> >>> True
+>>> >>> ('PROCESSING', 2, 3)
+>>> >>> ('READY_FOR_PICKUP', 3, 4)
+>>> >>> ('COMPLETED', 4, 5)
+>>> [(0, 'PENDING', 'customer-a'), (1, 'CONFIRMED', 'staff-s'), (2, 'PROCESSING', 'staff-s'), (3, 'READY_FOR_PICKUP', 'staff-s'), (4, 'COMPLETED', 'staff-s')]
+>>> >>> >>> True
+>>> 
+stderr and prompts
+OrderFlow R2 review. Use service, a, b and staff. See README.md for actions.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 39, in create_order
+    rules.validate_creation(service_id, quantity, note)
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/rules.py", line 27, in validate_creation
+    raise OrderError("INVALID_INPUT", "Enter a whole quantity from 1 to 99.")
+orderflow.models.OrderError: Enter a whole quantity from 1 to 99.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 39, in create_order
+    rules.validate_creation(service_id, quantity, note)
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/rules.py", line 27, in validate_creation
+    raise OrderError("INVALID_INPUT", "Enter a whole quantity from 1 to 99.")
+orderflow.models.OrderError: Enter a whole quantity from 1 to 99.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 39, in create_order
+    rules.validate_creation(service_id, quantity, note)
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/rules.py", line 27, in validate_creation
+    raise OrderError("INVALID_INPUT", "Enter a whole quantity from 1 to 99.")
+orderflow.models.OrderError: Enter a whole quantity from 1 to 99.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 39, in create_order
+    rules.validate_creation(service_id, quantity, note)
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/rules.py", line 27, in validate_creation
+    raise OrderError("INVALID_INPUT", "Enter a whole quantity from 1 to 99.")
+orderflow.models.OrderError: Enter a whole quantity from 1 to 99.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 39, in create_order
+    rules.validate_creation(service_id, quantity, note)
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/rules.py", line 30, in validate_creation
+    raise OrderError("INVALID_INPUT", "Use at most 500 characters for the note.")
+orderflow.models.OrderError: Use at most 500 characters for the note.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 41, in create_order
+    order = repository.create(db, principal.user_id, service_id, quantity, note)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/repository.py", line 24, in create
+    raise OrderError("INVALID_INPUT", "Select an available catalogue service.")
+orderflow.models.OrderError: Select an available catalogue service.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 54, in get_order
+    return repository.detail(
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/repository.py", line 92, in detail
+    raise not_found()
+orderflow.models.OrderError: No accessible order was found.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 65, in advance_order
+    _require_role(role, "STAFF")
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 27, in _require_role
+    raise OrderError("FORBIDDEN", "Your account cannot perform this operation.")
+orderflow.models.OrderError: Your account cannot perform this operation.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 40, in create_order
+    _require_role(role, "CUSTOMER")
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 27, in _require_role
+    raise OrderError("FORBIDDEN", "Your account cannot perform this operation.")
+orderflow.models.OrderError: Your account cannot perform this operation.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 69, in advance_order
+    rules.check_transition(current.status, target)
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/rules.py", line 46, in check_transition
+    raise OrderError("INVALID_TRANSITION", "Choose the next processing stage.")
+orderflow.models.OrderError: Choose the next processing stage.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 68, in advance_order
+    raise OrderError("STALE_VERSION", "This order changed. Refresh before continuing.")
+orderflow.models.OrderError: This order changed. Refresh before continuing.
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/services.py", line 69, in advance_order
+    rules.check_transition(current.status, target)
+  File "/Users/chenxingjian/Documents/Codex/2026-11-16/zhe/outputs/OrderFlow/src/orderflow/rules.py", line 46, in check_transition
+    raise OrderError("INVALID_TRANSITION", "Choose the next processing stage.")
+orderflow.models.OrderError: Choose the next processing stage.
+
+Review finished. Discarding this temporary shop.
+Exit code 0
+
+Saved output comparison passed. All listed tuples, three preserved snapshots, and twelve expected business rejections matched the guide.
