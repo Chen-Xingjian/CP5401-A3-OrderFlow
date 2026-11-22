@@ -41,3 +41,7 @@ The service accepts a trusted Principal carrying a user ID. It resolves the curr
 ## R4 interaction change
 
 The student approved a role selector followed by a per-role user selector on the same page. Customers Alex and Blair see their own orders. Staff Sam and Taylor share the queue and retain individual event attribution. Switching identity clears the previous selection, draft and action feedback. The change precedes V1.0 and is independent of CR001.
+
+## R4-02 local storage revision
+
+The student selected local SQLite for the demo. Each write uses BEGIN IMMEDIATE before checking the active identity and the displayed version. A second writer observes the newly committed version and receives STALE_VERSION. Local tests cover commit rollback and reopen the same file to check persistence. The R2 database choices above document the earlier PostgreSQL implementation.

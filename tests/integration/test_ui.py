@@ -13,10 +13,7 @@ PASSWORD = "fictional-test-password"
 
 @pytest.fixture
 def review_shop(database, monkeypatch):
-    with database.begin() as db:
-        schema = db.exec_driver_sql("SELECT current_schema()").scalar_one()
-    url = database.url.update_query_dict({"options": f"-c search_path={schema}"})
-    monkeypatch.setenv("DATABASE_URL", url.render_as_string(hide_password=False))
+    monkeypatch.setenv("ORDERFLOW_DB_PATH", database.url.database)
     return database
 
 
@@ -128,7 +125,7 @@ def test_demo_preparation_preserves_existing_orders_and_inactive_accounts(review
     assert service.get_order(owner, order.id) == snapshot
 
 
-def test_upgrade_r2_order_with_history(tmp_path, monkeypatch):
+def test_sqlite_migration_preserves_existing_history(tmp_path, monkeypatch):
     from orderflow import db
     from orderflow.services import OrderService
     from support.sandbox import sandbox_database

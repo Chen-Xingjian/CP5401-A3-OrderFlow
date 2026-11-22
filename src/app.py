@@ -1,13 +1,12 @@
 """Streamlit entry point for the OrderFlow campus print shop."""
 
-import os
 from zoneinfo import ZoneInfo
 
 import streamlit as st
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from orderflow import demo
-from orderflow.db import open_engine
+from orderflow.db import database_path, open_engine
 from orderflow.models import OrderError, Principal
 from orderflow.rules import NEXT_STATUS
 from orderflow.services import OrderService
@@ -36,8 +35,8 @@ SG = ZoneInfo("Asia/Singapore")
 
 
 @st.cache_resource
-def connect(url):
-    engine = open_engine(url, pool_pre_ping=True)
+def connect(path):
+    engine = open_engine(path)
     demo.prepare(engine)
     return engine
 
@@ -162,17 +161,8 @@ def main():
     st.set_page_config(page_title="OrderFlow · Campus print shop", page_icon="📄")
     st.title("OrderFlow")
     st.caption("Campus print shop · Demo workspace with fictional accounts")
-    url = os.getenv("DATABASE_URL")
-    if not url:
-        try:
-            url = st.secrets.get("DATABASE_URL")
-        except FileNotFoundError:
-            url = None
-    if not url:
-        st.error("OrderFlow needs a configured demo database connection.")
-        return
     try:
-        service = OrderService(connect(url))
+        service = OrderService(connect(database_path()))
         role = st.radio(
             "Demo role",
             ["Customer", "Staff"],
@@ -210,7 +200,7 @@ def main():
         order_list(service, actor, role == "Staff")
     except OrderError as error:
         st.error(str(error))
-    except (ValueError, ArgumentError, SQLAlchemyError, RuntimeError):
+    except (ValueError, OSError, ArgumentError, SQLAlchemyError, RuntimeError):
         st.error("The demo database is unavailable. Check its connection and migrations.")
 
 

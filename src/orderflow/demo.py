@@ -14,7 +14,7 @@ PEOPLE = (
 
 def prepare(engine):
     migrate(engine)
-    with engine.begin() as db:
+    with transaction(engine, write=True) as db:
         db.execute(
             text("""INSERT INTO users (id,username,role) VALUES (:id,:name,:role)
                     ON CONFLICT DO NOTHING"""),

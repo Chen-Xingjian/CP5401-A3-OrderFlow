@@ -26,3 +26,7 @@ T20 covers customer order submission, staff access and customer isolation on acc
 ## R4 demo and deployment
 
 T20 now exercises one-page role and user switching, customer drafts and order isolation, inactive accounts, stale staff updates and individual handover attribution. A separate test reruns demo provisioning against existing orders. Hosted release verification checks the actual deployed revision, UI and order history after application restart. The student evaluates the business outcome after hosted checks.
+
+## R4-02 SQLite verification
+
+The current suite runs on temporary SQLite files. T15–T16 use a history trigger for a statement failure and a deferred foreign-key violation for a commit failure. T17 synchronises two staff connections after reading the same version. T19 reopens the file and reapplies migrations. Import checks preserve order history, reject overwrite and discard failed copies.

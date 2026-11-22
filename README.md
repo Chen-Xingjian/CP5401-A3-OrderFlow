@@ -10,7 +10,7 @@ Anyone with app access can select any of the four fictional identities. The sele
 
 ## Run the local review application
 
-Use Python 3.12 and PostgreSQL 16 with initdb, pg_ctl, psql and createdb on PATH. From the project root:
+Use Python 3.12 with its bundled SQLite library (SQLite 3.35 or newer). From the project root:
 
 ```sh
 python3.12 -m venv .venv
@@ -19,22 +19,24 @@ python -m pip install -r requirements.txt
 sh scripts/review-app.sh
 ```
 
-Open http://127.0.0.1:8513. The launcher stores the local shop under the ignored directory `.local-review/`. Restarting it reopens the same shop. Stop the app with Ctrl-C. To stop its database, run `pg_ctl -D .local-review/data -m fast -w stop`.
+Open http://127.0.0.1:8514. The application creates the catalogue and demo identities on first use. Orders and their histories are stored in `.local-review/orderflow.sqlite3`. Stop the app with Ctrl-C and relaunch it to reopen the same file. Set `ORDERFLOW_DB_PATH` to use a different SQLite file. The local review requires no database server, secrets or hosting account.
 
-## Deploy on Streamlit Community Cloud
+### Carry over an earlier local PostgreSQL shop
 
-Connect the GitHub repository, choose branch `main`, set the entry point to `src/app.py` and select Python 3.12 in Advanced settings. Configure the root-level secret `DATABASE_URL` with the TLS connection string for a dedicated hosted PostgreSQL database. Use the database provider's session-compatible connection and a user with permission to create the schema objects. Keep the real connection string in the platform's secrets. Startup applies versioned migrations and adds missing fictional identities. Existing demo orders and history remain in PostgreSQL across application restarts.
-
-For release verification, record the deployed commit, actual app URL and CI run. Open a fresh browser session and confirm the shop renders both selectors and the catalogue. Place an identifiable fictional order, switch users and verify customer isolation and staff attribution. Reboot the cloud app and reopen the same order to verify persistence. Record the observations before requesting student acceptance.
+If you already have an R3 shop in this project directory, keep the old database running for the one-time import. With its original local `psql` available on PATH, run `PYTHONPATH=src python -m support.import_review` before the first SQLite launch. The importer copies and compares identities, catalogue, orders and events from one read-only snapshot. It publishes a new file only after all four tables match and refuses to overwrite an existing SQLite file. Legacy password records stay with the old database. An empty installation can launch directly.
 
 ## Run the checks
 
 ```sh
 python -m pip install -r requirements-dev.txt
-sh scripts/local-pg.sh sh scripts/check.sh
+sh scripts/check.sh
 ```
 
-Alternatively run `docker compose run --build --rm checks`. CI invokes the same check script against its own PostgreSQL service. Tests create isolated schemas. The UI suite exercises role and user switching, account deactivation, stale staff actions and the handover flow using the real service and database.
+CI runs the same command on isolated, temporary SQLite files. Tests cover the order lifecycle, customer boundaries, stale staff updates, writer contention, rollback at commit, migration and single-page role switching.
+
+## Submission status
+
+This candidate is verified locally. The assessment separately asks for an accessible deployed application URL. Local persistence evidence covers this machine only.
 
 ## Project records
 
@@ -42,6 +44,7 @@ Alternatively run `docker compose run --build --rm checks`. CI invokes the same 
 - [R2 acceptance decision](docs/iterations/R2-01-decision.md)
 - [R3 implementation and student review](docs/iterations/R3-01.md)
 - [Test map](docs/test-plan.md)
-
 - [R3 acceptance decision](docs/iterations/R3-01-decision.md)
 - [R4 release verification](docs/iterations/R4-01.md)
+
+- [Local SQLite candidate](docs/iterations/R4-02.md)

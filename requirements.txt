@@ -1,5 +1,4 @@
 SQLAlchemy==2.0.58
-psycopg[binary]==3.3.9
 typing_extensions==4.16.0
 greenlet==3.2.4 ; platform_machine == "x86_64" or platform_machine == "AMD64" or platform_machine == "aarch64"
 
