@@ -8,7 +8,7 @@ Select **Customer** and choose **Alex** or **Blair** in **Demo user**. Place an 
 
 Anyone with app access can select any of the four fictional identities. The selector demonstrates role and ownership rules. Use a dedicated database containing only fictional orders and notes.
 
-On the V1.1 candidate, customers can choose **Cancel order** on their own orders until staff start production. A cancelled order stays in **My orders** and the **Shop queue** with its history. The staff workflow ends for that order. A stale page prompts the user to refresh.
+From V1.1, customers can choose **Cancel order** on their own orders until staff start production. A cancelled order stays in **My orders** and the **Shop queue** with its history. The staff workflow ends for that order. A stale page prompts the user to refresh.
 
 ## Run the local review application
 
@@ -35,6 +35,10 @@ sh scripts/check.sh
 ```
 
 CI runs the same command on isolated, temporary SQLite files. Tests cover the order lifecycle, customer boundaries, stale staff updates, writer contention, rollback at commit, migration and single-page role switching.
+
+## V1.1 release
+
+The student approved CR001 after seven hosted acceptance steps on four orders. [Open the demo](https://cp5401-orderflow.streamlit.app/) · [Hosted acceptance record](docs/iterations/V1.1-acceptance.md) · [V1.1 release](https://github.com/Chen-Xingjian/CP5401-OrderFlow/releases/tag/v1.1.0)
 
 ## V1.0 baseline
 
