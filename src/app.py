@@ -4,11 +4,11 @@ import os
 from zoneinfo import ZoneInfo
 
 import streamlit as st
-from sqlalchemy.exc import ArgumentError
+from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
-from orderflow.auth import authenticate
+from orderflow import demo
 from orderflow.db import open_engine
-from orderflow.models import OrderError
+from orderflow.models import OrderError, Principal
 from orderflow.rules import NEXT_STATUS
 from orderflow.services import OrderService
 
@@ -37,30 +37,23 @@ SG = ZoneInfo("Asia/Singapore")
 
 @st.cache_resource
 def connect(url):
-    return open_engine(url, pool_pre_ping=True)
+    engine = open_engine(url, pool_pre_ping=True)
+    demo.prepare(engine)
+    return engine
 
 
-def clear_session():
-    for key in list(st.session_state):
-        del st.session_state[key]
+def clear_workspace():
+    for key in ("actor", "chosen", "feedback", "item", "copies", "note"):
+        st.session_state.pop(key, None)
+
+
+def change_role():
+    clear_workspace()
+    st.session_state.pop("demo_user", None)
 
 
 def show_error(error):
-    if error.code == "UNAUTHENTICATED":
-        clear_session()
     st.session_state["feedback"] = ("error", str(error))
-
-
-def sign_in(engine):
-    name = st.session_state["login_name"]
-    password = st.session_state.pop("login_password", "")
-    try:
-        actor = authenticate(engine, name, password)
-    except OrderError as error:
-        show_error(error)
-        return
-    clear_session()
-    st.session_state["actor"] = actor
 
 
 def new_order(service):
@@ -75,7 +68,8 @@ def new_order(service):
         show_error(error)
         return
     st.session_state["chosen"] = str(order.id)
-    st.session_state["page"] = "My orders"
+    st.session_state.pop("note", None)
+    st.session_state.pop("copies", None)
     st.session_state["feedback"] = ("success", "Order placed.")
 
 
@@ -161,49 +155,57 @@ def order_list(service, actor, staff):
 def main():
     st.set_page_config(page_title="OrderFlow · Campus print shop", page_icon="📄")
     st.title("OrderFlow")
-    st.caption("Campus print shop")
+    st.caption("Campus print shop · Demo workspace with fictional accounts")
     url = os.getenv("DATABASE_URL")
     if not url:
-        st.error("OrderFlow needs a configured database connection.")
+        try:
+            url = st.secrets.get("DATABASE_URL")
+        except FileNotFoundError:
+            url = None
+    if not url:
+        st.error("OrderFlow needs a configured demo database connection.")
         return
     try:
         service = OrderService(connect(url))
-    except (ValueError, ArgumentError):
-        st.error("Check the database connection configuration.")
-        return
-    if feedback := st.session_state.pop("feedback", None):
-        kind, message = feedback
-        (st.success if kind == "success" else st.error)(message)
-    actor = st.session_state.get("actor")
-    if actor is None:
-        st.header("Sign in")
-        with st.form("login"):
-            st.text_input("Username", key="login_name")
-            st.text_input("Password", type="password", key="login_password")
-            st.form_submit_button(
-                "Sign in", type="primary", on_click=sign_in, args=(service.engine,)
-            )
-        return
-    try:
-        role = service.account_role(actor)
-        staff = role == "STAFF"
-        st.sidebar.subheader("Account")
-        st.sidebar.write(f"{actor.user_id} · {'Staff' if staff else 'Customer'}")
-        st.sidebar.button("Refresh orders")
-        st.sidebar.button("Sign out", on_click=clear_session)
-        if not staff:
-            page = st.radio(
-                "Workspace", ["My orders", "Place an order"], horizontal=True, key="page"
-            )
-            if page == "Place an order":
-                order_form(service, actor)
-                return
-        order_list(service, actor, staff)
+        role = st.radio(
+            "Demo role",
+            ["Customer", "Staff"],
+            horizontal=True,
+            key="demo_role",
+            on_change=change_role,
+        )
+        users = demo.choices(service.engine, role.upper())
+        if not users:
+            clear_workspace()
+            st.info("No active demo users are available for this role.")
+            return
+        if st.session_state.get("demo_user") not in users:
+            clear_workspace()
+            st.session_state["demo_user"] = next(iter(users))
+        selected = st.selectbox(
+            "Demo user",
+            list(users),
+            format_func=users.get,
+            key="demo_user",
+            on_change=clear_workspace,
+        )
+        actor = Principal(selected)
+        st.session_state["actor"] = actor
+        if service.account_role(actor) != role.upper():
+            clear_workspace()
+            st.warning("This demo account changed. Select an active account.")
+            return
+        if feedback := st.session_state.pop("feedback", None):
+            kind, message = feedback
+            (st.success if kind == "success" else st.error)(message)
+        if role == "Customer":
+            order_form(service, actor)
+        st.button("Refresh orders")
+        order_list(service, actor, role == "Staff")
     except OrderError as error:
-        if error.code == "UNAUTHENTICATED":
-            show_error(error)
-            st.rerun()
         st.error(str(error))
+    except (ValueError, ArgumentError, SQLAlchemyError, RuntimeError):
+        st.error("The demo database is unavailable. Check its connection and migrations.")
 
 
 main()

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run the local review shop. Its data and generated credentials survive a restart.
+# Run the local review shop. Its PostgreSQL data survives a restart.
 set -eu
 umask 077
 cd "$(dirname "$0")/.."
@@ -21,11 +21,5 @@ if [ "$(psql -h "$state" -U orderflow -d postgres -Atc "SELECT count(*) FROM pg_
 fi
 export DATABASE_URL="postgresql+psycopg://orderflow@/orderflow_review?host=$state"
 export PYTHONPATH=src
-python -m orderflow.db
-if [ ! -s "$state/accounts.txt" ]; then
-    python -m support.provision > "$state/accounts.tmp"
-    mv "$state/accounts.tmp" "$state/accounts.txt"
-fi
-echo "Review account credentials: $state/accounts.txt"
 exec python -m streamlit run src/app.py --server.address 127.0.0.1 \
     --server.port "${ORDERFLOW_PORT:-8513}" --server.headless true

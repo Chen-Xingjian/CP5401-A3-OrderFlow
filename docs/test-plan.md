@@ -22,3 +22,7 @@ Use the handover scenario in the [R3 review](iterations/R3-01.md). Record the ca
 ## R3 interface checks
 
 T20 covers customer order submission, staff access and customer isolation on account switching, live status refresh, ready versus handed over, generic sign-in errors, account deactivation and a stale action from a second staff session. The local review record links to the actual results. The R2 T19 migration assertion now checks both migration names after reconnecting and reapplying migrations.
+
+## R4 demo and deployment
+
+T20 now exercises one-page role and user switching, customer drafts and order isolation, inactive accounts, stale staff updates and individual handover attribution. A separate test reruns demo provisioning against existing orders. Hosted release verification checks the actual deployed revision, UI and order history after application restart. The student evaluates the business outcome after hosted checks.
