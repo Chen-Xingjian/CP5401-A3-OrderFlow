@@ -1,5 +1,7 @@
 """Streamlit entry point for the OrderFlow campus print shop."""
 
+from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -9,7 +11,7 @@ from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 from orderflow import demo
 from orderflow.db import database_path, migration_revision, open_engine
 from orderflow.models import OrderError, Principal
-from orderflow.rules import CANCELLABLE, NEXT_STATUS
+from orderflow.rules import CANCELLABLE, NEXT_STATUS, pickup_is_overdue
 from orderflow.services import OrderService
 
 LABELS = {
@@ -20,6 +22,7 @@ LABELS = {
     "COMPLETED": "Completed",
     "CANCELLED": "Cancelled",
 }
+QUEUE_FILTERS = {**LABELS, "OVERDUE": "Pickup overdue"}
 ACTIONS = {
     "PENDING": "Confirm order",
     "CONFIRMED": "Start production",
@@ -46,7 +49,7 @@ def connect(path, schema_revision):
 
 
 def clear_workspace():
-    for key in ("actor", "chosen", "feedback"):
+    for key in ("actor", "chosen", "feedback", "queue_filter"):
         st.session_state.pop(key, None)
 
 
@@ -126,13 +129,60 @@ def order_form(service, actor):
         )
 
 
+def set_queue_filter(stage):
+    st.session_state["queue_filter"] = stage
+
+
+def queue_filters(orders, overdue):
+    counts = Counter(order.status for order in orders)
+    counts["OVERDUE"] = len(overdue)
+    selected = st.session_state.get("queue_filter")
+    with st.container(
+        horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"
+    ):
+        st.markdown("**Current workload**")
+        st.button(
+            "Clear filter", disabled=selected is None, on_click=set_queue_filter, args=(None,)
+        )
+    with st.container(horizontal=True, gap="small"):
+        for stage, label in QUEUE_FILTERS.items():
+            active = stage == selected
+            st.button(
+                f"{label} ({counts[stage]})",
+                key=f"filter_{stage}",
+                type="primary" if active else "secondary",
+                icon=":material/check:" if active else None,
+                on_click=set_queue_filter,
+                args=(stage,),
+            )
+    st.caption(
+        f"Pickup overdue: {len(overdue)} of {counts['READY_FOR_PICKUP']} ready for pickup · "
+        "48 hours or more since marked ready."
+    )
+    return selected
+
+
 def order_list(service, actor, staff):
     with st.container(
         horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"
     ):
         st.header("Shop queue" if staff else "My orders", anchor="order-tracking", width="content")
         st.button("Refresh orders", icon=":material/refresh:")
-    orders = service.list_orders(actor)
+    as_of = datetime.now(UTC)
+    overdue = set()
+    if staff:
+        orders, overdue = service.staff_queue(actor, as_of=as_of)
+        selected = queue_filters(orders, overdue)
+        if selected:
+            if selected == "OVERDUE":
+                orders = [order for order in orders if order.id in overdue]
+            else:
+                orders = [order for order in orders if order.status == selected]
+            if not orders:
+                st.info(f"No orders match the {QUEUE_FILTERS[selected]} filter.")
+                return
+    else:
+        orders = service.list_orders(actor)
     if not orders:
         st.info(
             "The queue is empty." if staff else "Your orders will appear here after you place one."
@@ -142,16 +192,29 @@ def order_list(service, actor, staff):
 
     def label(value):
         o = choices[value]
-        return f"{str(o.id)[:8].upper()} · {o.service_name_snapshot} · {LABELS[o.status]}"
+        stage = LABELS[o.status]
+        if o.id in overdue:
+            stage += " · Pickup overdue"
+        return f"{str(o.id)[:8].upper()} · {o.service_name_snapshot} · {stage}"
 
     if st.session_state.get("chosen") not in choices:
         st.session_state["chosen"] = next(iter(choices))
     selection = st.selectbox("Select order", list(choices), format_func=label, key="chosen")
     detail = service.get_order(actor, choices[selection].id)
     o = detail.order
+    if staff and selected and o.version != choices[selection].version:
+        # A concurrent transition may have moved the order out of this filtered snapshot.
+        st.rerun()
     with st.container(key="receipt"):
         st.subheader(LABELS[o.status], anchor=False)
         st.write(INSTRUCTIONS[o.status])
+        if staff and o.status == "READY_FOR_PICKUP":
+            ready_at = detail.history[-1].occurred_at
+            if pickup_is_overdue(ready_at, as_of):
+                st.warning(
+                    f"Pickup overdue · Ready since {ready_at.astimezone(SG):%d %b %Y, %H:%M} SGT."
+                )
+
         first, second = st.columns([3, 1])
         first.caption("Print service")
         first.write(o.service_name_snapshot)

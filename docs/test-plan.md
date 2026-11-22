@@ -44,3 +44,9 @@ The current suite runs on temporary SQLite files. T15–T16 use a history trigge
 | T28 | Streamlit AppTest checks eligible and ineligible views, owner switching, cancelled history in the staff queue, and stale-page refresh feedback. |
 
 The original T19 migration inventory now includes the third checksum-tracked migration. The V1.0 test cases still run in the complete suite. The student's manual VAL-02 review is tracked separately in the R6 report.
+
+### CR002 workload and pickup time
+
+T29 checks the instant before, at and after 48 hours using a fixed observation time, including different UTC offsets. T30 checks staff-only access, consistent cross-customer metrics, stable repeated reads, removal on handover, and the customer view. For human validation, ask a staff reviewer to find an overdue order, refresh, then hand it over and explain the change in both counts and order history.
+
+Staff queue filter checks cover each status, overdue membership within the ready set, stable whole-queue counts and refresh. Handing over the only overdue order leaves an empty filtered result. Clearing restores all orders. T31 also checks identity changes and customer isolation.
