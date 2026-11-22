@@ -36,7 +36,7 @@ CI runs the same command on isolated, temporary SQLite files. Tests cover the or
 
 ## Submission status
 
-This candidate is verified locally. The assessment separately asks for an accessible deployed application URL. Local persistence evidence covers this machine only.
+The student accepted the local SQLite candidate v1.0.0-rc.2 on 22 November 2026 after checking customer order visibility and staff handover attribution. The selected deployment platform is Streamlit. The final application URL and remote verification are pending.
 
 ## Project records
 
@@ -47,4 +47,4 @@ This candidate is verified locally. The assessment separately asks for an access
 - [R3 acceptance decision](docs/iterations/R3-01-decision.md)
 - [R4 release verification](docs/iterations/R4-01.md)
 
-- [Local SQLite candidate](docs/iterations/R4-02.md)
+- [R4-02 local acceptance decision](docs/iterations/R4-02.md)
