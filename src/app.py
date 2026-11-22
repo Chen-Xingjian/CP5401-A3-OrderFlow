@@ -170,7 +170,6 @@ def order_list(service, actor, staff):
         st.header("Shop queue" if staff else "My orders", anchor="order-tracking", width="content")
         st.button("Refresh orders", icon=":material/refresh:")
     as_of = datetime.now(UTC)
-    overdue = set()
     if staff:
         orders, overdue = service.staff_queue(actor, as_of=as_of)
         selected = queue_filters(orders, overdue)
@@ -183,7 +182,7 @@ def order_list(service, actor, staff):
                 st.info(f"No orders match the {QUEUE_FILTERS[selected]} filter.")
                 return
     else:
-        orders = service.list_orders(actor)
+        orders, overdue = service.customer_queue(actor, as_of=as_of)
     if not orders:
         st.info(
             "The queue is empty." if staff else "Your orders will appear here after you place one."
@@ -203,13 +202,15 @@ def order_list(service, actor, staff):
     selection = st.selectbox("Select order", list(choices), format_func=label, key="chosen")
     detail = service.get_order(actor, choices[selection].id)
     o = detail.order
-    if staff and selected and o.version != choices[selection].version:
-        # A concurrent transition may have moved the order out of this filtered snapshot.
+    if o.version != choices[selection].version:
+        # Refresh labels and reminders if the order changed after we read the queue.
         st.rerun()
+    if not staff and overdue and o.id not in overdue:
+        st.warning("You have prints awaiting pickup. Select an order marked ‘Pickup overdue’.")
     with st.container(key="receipt"):
         st.subheader(LABELS[o.status], anchor=False)
         st.write(INSTRUCTIONS[o.status])
-        if staff and o.status == "READY_FOR_PICKUP":
+        if o.status == "READY_FOR_PICKUP":
             ready_at = detail.history[-1].occurred_at
             if pickup_is_overdue(ready_at, as_of):
                 st.warning(
@@ -223,7 +224,7 @@ def order_list(service, actor, staff):
         second.write(str(o.quantity))
         st.caption(f"Order ID · {o.id}")
         if staff:
-            st.caption(f"Customer · {o.owner_id}")
+            st.caption(f"Customer · {detail.owner_name.title()}")
         if o.note:
             st.markdown("**Print notes**")
             st.text(o.note)
@@ -252,7 +253,7 @@ def order_list(service, actor, staff):
             with st.container(key=f"event_{item.sequence}", gap=None):
                 st.write(f"{source} → {LABELS[item.to_status]}")
                 st.caption(
-                    f"{item.occurred_at.astimezone(SG):%d %b %Y, %H:%M} SGT · {item.actor_id}"
+                    f"{item.occurred_at.astimezone(SG):%d %b %Y, %H:%M} SGT · {item.actor_name.title()}"
                 )
 
 

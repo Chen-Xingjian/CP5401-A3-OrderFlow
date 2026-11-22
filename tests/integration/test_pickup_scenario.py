@@ -117,3 +117,35 @@ def test_public_entry_switches_between_shared_shop_and_private_scenario(
     assert app.selectbox(key="chosen").value == str(original.id)
     assert service.get_order(alex, original.id) == before
     assert "pickup_scenario" not in app.session_state
+
+
+def test_customer_pickup_reminders_and_display_names():
+    app = start()
+    app.radio(key="demo_role").set_value("Customer").run()
+    assert "Pickup overdue" not in app.selectbox(key="chosen").options[0]
+    assert not app.warning
+    assert any(c.value.endswith(" · Alex") for c in app.caption)
+
+    app.selectbox(key="demo_user").set_value("customer-b").run()
+    picker = app.selectbox(key="chosen")
+    overdue_order = picker.value
+    assert len(picker.options) == 1 and "Pickup overdue" in picker.options[0]
+    assert "Ready since" in app.warning[0].value
+    assert any(c.value.endswith(" · Blair") for c in app.caption)
+    assert any(c.value.endswith(" · Sam") for c in app.caption)
+    click(app, "Place order")
+    assert app.selectbox(key="chosen").value != overdue_order
+    assert "Select an order" in app.warning[0].value
+
+    app.radio(key="demo_role").set_value("Staff").run()
+    app.selectbox(key="demo_user").set_value("staff-t").run()
+    app.button(key="filter_OVERDUE").click().run()
+    assert any(c.value == "Customer · Blair" for c in app.caption)
+    click(app, "Confirm handover")
+    app.radio(key="demo_role").set_value("Customer").run()
+    app.selectbox(key="demo_user").set_value("customer-b").run()
+    app.selectbox(key="chosen").set_value(overdue_order).run()
+    assert not app.exception and not app.warning
+    assert all("Pickup overdue" not in option for option in app.selectbox(key="chosen").options)
+    events = [c.value.split(" · ")[-1] for c in app.caption if "SGT · " in c.value]
+    assert events == ["Taylor", "Sam", "Sam", "Sam", "Blair"]

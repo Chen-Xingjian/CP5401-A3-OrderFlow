@@ -39,9 +39,11 @@ class Event:
     to_status: str
     actor_id: str
     occurred_at: datetime
+    actor_name: str
 
 
 @dataclass(frozen=True)
 class OrderDetail:
     order: Order
     history: tuple[Event, ...]
+    owner_name: str

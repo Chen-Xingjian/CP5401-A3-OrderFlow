@@ -24,6 +24,9 @@ def test_t29_queue_ages_from_ready_event(service):
     before = service.get_order(ALEX, order.id)
     due = before.history[-1].occurred_at + timedelta(hours=48)
     assert service.staff_queue(SAM, as_of=due - timedelta(microseconds=1)) == ([order], set())
+    assert service.customer_queue(ALEX, as_of=due - timedelta(microseconds=1)) == ([order], set())
+    assert service.customer_queue(ALEX, as_of=due) == ([order], {order.id})
+    assert service.customer_queue(Principal("customer-b"), as_of=due) == ([], set())
     for _ in range(2):
         assert service.staff_queue(SAM, as_of=due) == ([order], {order.id})
     assert service.get_order(ALEX, order.id) == before
