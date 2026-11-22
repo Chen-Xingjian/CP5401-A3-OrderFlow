@@ -2,6 +2,8 @@ from uuid import UUID
 
 from .models import OrderError
 
+CANCELLABLE = frozenset({"PENDING", "CONFIRMED"})
+
 NEXT_STATUS = {
     "PENDING": "CONFIRMED",
     "CONFIRMED": "PROCESSING",
@@ -44,3 +46,15 @@ def validate_update(target: str, expected_version: int) -> None:
 def check_transition(current: str, target: str) -> None:
     if current not in NEXT_STATUS or NEXT_STATUS[current] != target:
         raise OrderError("INVALID_TRANSITION", "Choose the next processing stage.")
+
+
+def check_cancellation(current: str) -> None:
+    if current == "CANCELLED":
+        raise OrderError("ALREADY_CANCELLED", "This order has already been cancelled.")
+    if current not in CANCELLABLE:
+        raise OrderError("INVALID_TRANSITION", "Orders can only be cancelled before production.")
+
+
+def check_version(current: int, expected: int) -> None:
+    if current != expected:
+        raise OrderError("STALE_VERSION", "This order changed. Refresh before continuing.")

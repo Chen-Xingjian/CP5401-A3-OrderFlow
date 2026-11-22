@@ -44,3 +44,30 @@ def test_invalid_version(version):
     with pytest.raises(OrderError) as error:
         validate_update("CONFIRMED", version)
     assert error.value.code == "INVALID_INPUT"
+
+
+@pytest.mark.parametrize("status", ["PENDING", "CONFIRMED"])
+def test_t21_cancellation_is_separate_from_staff_progress(status):
+    from orderflow.rules import check_cancellation
+
+    check_cancellation(status)
+    with pytest.raises(OrderError) as error:
+        check_transition(status, "CANCELLED")
+    assert error.value.code == "INVALID_TRANSITION"
+
+
+@pytest.mark.parametrize(
+    "status,code",
+    [
+        ("PROCESSING", "INVALID_TRANSITION"),
+        ("READY_FOR_PICKUP", "INVALID_TRANSITION"),
+        ("COMPLETED", "INVALID_TRANSITION"),
+        ("CANCELLED", "ALREADY_CANCELLED"),
+    ],
+)
+def test_t22_t24_cancellation_denials(status, code):
+    from orderflow.rules import check_cancellation
+
+    with pytest.raises(OrderError) as error:
+        check_cancellation(status)
+    assert error.value.code == code

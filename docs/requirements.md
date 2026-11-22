@@ -8,19 +8,20 @@ The accepted R1-01 baseline describes the needs of campus print-shop customers a
 | FR-02 | A customer can see their own orders, quantities, notes, service names, current stages and ordered histories. Another customer's order is absent from the list and inaccessible by ID. |
 | FR-03 | Staff can read the shop queue, stages and histories for all customers. |
 | FR-04 | Staff can confirm, start processing, mark ready for pickup and confirm physical handover in that order. |
+| FR-06 (V1.1) | An active customer can cancel an owned pending or confirmed order and see the cancellation in its history. |
 | FR-05 | Each event records the actor, UTC time, source and target stage, and sequence. The full lifecycle has five events including creation. |
 
 ## Business rules
 
 | Rules | Contract |
 |---|---|
-| BR-01, BR-04 | Derive ownership from the active principal selected in the fictional demo workspace. Resolve role and activity at the service boundary for every operation. Customer reads require ownership. Staff own the update permission. |
+| BR-01, BR-04 | Derive ownership from the active principal selected in the fictional demo workspace. Resolve role and activity at the service boundary for every operation. Customer reads require ownership. Only staff may advance production and handover. |
 | BR-02 | Each request selects one available catalogue entry. Store its name at creation. Reject fractions, booleans, out-of-range quantities, invalid service IDs and oversized notes. |
 | BR-03, BR-11 | PENDING → CONFIRMED → PROCESSING → READY_FOR_PICKUP → COMPLETED. The final edge records collection or handover. COMPLETED is terminal. |
 | BR-05, BR-06, BR-07, BR-12 | The initial version and sequence are zero. One successful transition commits one new version and one event together. History is ordered by sequence. Its last target matches the order. |
-| BR-08, BR-09 | An update carries the version the staff member read. Check access and version before the transition. An outdated version asks the caller to refresh. Rejections and rolled-back writes preserve the committed snapshot. |
+| BR-08, BR-09 | An update carries the version the acting user read. Check access and version before the transition. An outdated version asks the caller to refresh. Rejections and rolled-back writes preserve the committed snapshot. |
 
-Orders have one service each. Payments, shipping, inventory, uploads, order editing and catalogue management are outside the approved prototype. FR-06 and BR-10 describe prospective change CR001, customer cancellation. That change requires a released V1.0 and a separate decision.
+Orders have one service each. Payments, shipping, inventory, uploads, order editing and catalogue management are outside the approved prototype. The student approved [CR001](https://github.com/Chen-Xingjian/CP5401-OrderFlow/issues/2) after V1.0. Under BR-10/11 an active owner can move PENDING or CONFIRMED to CANCELLED. The service checks ownership before version and version before state. CANCELLED is terminal. A current-version retry reports ALREADY_CANCELLED; an old version reports STALE_VERSION. Both preserve the stored snapshot.
 
 ## Quality targets
 

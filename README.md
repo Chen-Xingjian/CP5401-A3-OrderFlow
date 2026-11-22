@@ -8,6 +8,8 @@ Select **Customer** and choose **Alex** or **Blair** in **Demo user**. Place an 
 
 Anyone with app access can select any of the four fictional identities. The selector demonstrates role and ownership rules. Use a dedicated database containing only fictional orders and notes.
 
+On the V1.1 candidate, customers can choose **Cancel order** on their own orders until staff start production. A cancelled order stays in **My orders** and the **Shop queue** with its history. The staff workflow ends for that order. A stale page prompts the user to refresh.
+
 ## Run the local review application
 
 Use Python 3.12 with its bundled SQLite library (SQLite 3.35 or newer). From the project root:

@@ -27,6 +27,12 @@ def _require_role(actual: str, required: str) -> None:
         raise OrderError("FORBIDDEN", "Your account cannot perform this operation.")
 
 
+def _record_transition(db: Connection, current: Order, target: str, principal: Principal) -> Order:
+    updated = repository.advance(db, current.id, target)
+    repository.append_event(db, updated, current.status, principal.user_id)
+    return updated
+
+
 class OrderService:
     def __init__(self, engine: Engine):
         self.engine = engine
@@ -73,9 +79,19 @@ class OrderService:
             rules.validate_update(target, expected_version)
             _require_role(role, "STAFF")
             current = repository.current_order(db, order_id)
-            if expected_version != current.version:
-                raise OrderError("STALE_VERSION", "This order changed. Refresh before continuing.")
+            rules.check_version(current.version, expected_version)
             rules.check_transition(current.status, target)
-            updated = repository.advance(db, order_id, target)
-            repository.append_event(db, updated, current.status, principal.user_id)
-            return updated
+            return _record_transition(db, current, target, principal)
+
+    def cancel_order(
+        self, principal: Principal | None, order_id: UUID, *, expected_version: int
+    ) -> Order:
+        with transaction(self.engine, write=True) as db:
+            role = _role(db, principal)
+            rules.validate_order_id(order_id)
+            rules.validate_update("CANCELLED", expected_version)
+            _require_role(role, "CUSTOMER")
+            current = repository.current_order(db, order_id, owner_id=principal.user_id)
+            rules.check_version(current.version, expected_version)
+            rules.check_cancellation(current.status)
+            return _record_transition(db, current, "CANCELLED", principal)

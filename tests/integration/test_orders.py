@@ -229,7 +229,11 @@ def test_t19_reopen_database_and_rerun_migration(service, database):
     with database.connect() as db:
         assert db.exec_driver_sql(
             "SELECT name FROM schema_migrations ORDER BY name"
-        ).scalars().all() == ["001_baseline.sql", "002_account_passwords.sql"]
+        ).scalars().all() == [
+            "001_baseline.sql",
+            "002_account_passwords.sql",
+            "003_customer_cancellation.sql",
+        ]
 
 
 def test_invalid_reference_and_version_preserve_order(service):

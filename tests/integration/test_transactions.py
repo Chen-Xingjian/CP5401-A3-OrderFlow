@@ -15,9 +15,9 @@ def confirmed_order(service):
     return service.advance_order(S, order.id, target="CONFIRMED", expected_version=0)
 
 
-@pytest.mark.parametrize("operation", ["advance", "create"])
+@pytest.mark.parametrize("operation", ["advance", "create", "cancel"])
 @pytest.mark.parametrize("stage", ["before_history_insert", "at_commit"])
-def test_t15_t16_atomic_failure(service, database, operation, stage):
+def test_t15_t16_t26_atomic_failure(service, database, operation, stage):
     order = confirmed_order(service)
     before = service.get_order(A, order.id)
     with database.begin() as db:
@@ -46,6 +46,8 @@ def test_t15_t16_atomic_failure(service, database, operation, stage):
     with pytest.raises(OrderError) as failure:
         if operation == "advance":
             service.advance_order(S, order.id, target="PROCESSING", expected_version=1)
+        elif operation == "cancel":
+            service.cancel_order(A, order.id, expected_version=1)
         else:
             service.create_order(A, service_id="colour-print", quantity=3)
     event.remove(database, "after_cursor_execute", after_statement)

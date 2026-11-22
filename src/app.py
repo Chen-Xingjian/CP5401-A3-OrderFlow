@@ -6,9 +6,9 @@ import streamlit as st
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from orderflow import demo
-from orderflow.db import database_path, open_engine
+from orderflow.db import database_path, migration_revision, open_engine
 from orderflow.models import OrderError, Principal
-from orderflow.rules import NEXT_STATUS
+from orderflow.rules import CANCELLABLE, NEXT_STATUS
 from orderflow.services import OrderService
 
 LABELS = {
@@ -17,6 +17,7 @@ LABELS = {
     "PROCESSING": "In production",
     "READY_FOR_PICKUP": "Ready for pickup",
     "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled",
 }
 ACTIONS = {
     "PENDING": "Confirm order",
@@ -30,12 +31,14 @@ INSTRUCTIONS = {
     "PROCESSING": "Printing is in progress. Please wait for the pickup update.",
     "READY_FOR_PICKUP": "Your prints are ready. Collect them at the print counter.",
     "COMPLETED": "The shop has recorded the handover to the customer.",
+    "CANCELLED": "The customer cancelled this order before production.",
 }
 SG = ZoneInfo("Asia/Singapore")
 
 
 @st.cache_resource
-def connect(path):
+def connect(path, schema_revision):
+    # Streamlit uses both arguments to decide when to prepare the database again.
     engine = open_engine(path)
     demo.prepare(engine)
     return engine
@@ -90,6 +93,15 @@ def advance(service, order_id, stage, version):
     )
 
 
+def cancel(service, order_id, version):
+    try:
+        service.cancel_order(st.session_state.get("actor"), order_id, expected_version=version)
+    except OrderError as error:
+        show_error(error)
+        return
+    st.session_state["feedback"] = ("success", "Order cancelled.")
+
+
 def order_form(service, actor):
     st.header("Place an order")
     options = service.available_services(actor)
@@ -140,6 +152,14 @@ def order_list(service, actor, staff):
         if o.note:
             st.markdown("**Print notes**")
             st.text(o.note)
+        if not staff and o.status in CANCELLABLE:
+            st.caption("You can cancel this order until production starts.")
+            st.button(
+                "Cancel order",
+                key=f"cancel_{o.id}_{o.version}",
+                on_click=cancel,
+                args=(service, o.id, o.version),
+            )
         if staff and o.status in NEXT_STATUS:
             if o.status == "READY_FOR_PICKUP":
                 st.write("Confirm only after you have handed the prints to the customer.")
@@ -162,7 +182,7 @@ def main():
     st.title("OrderFlow")
     st.caption("Campus print shop · Demo workspace with fictional accounts")
     try:
-        service = OrderService(connect(database_path()))
+        service = OrderService(connect(database_path(), migration_revision()))
         role = st.radio(
             "Demo role",
             ["Customer", "Staff"],

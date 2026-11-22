@@ -25,6 +25,14 @@ def database_path() -> Path:
     )
 
 
+def migration_revision() -> tuple[tuple[str, str], ...]:
+    """Identify the ordered SQL files used to prepare a cached database engine."""
+    return tuple(
+        (path.name, hashlib.sha256(path.read_bytes()).hexdigest())
+        for path in sorted(MIGRATIONS.glob("*.sql"))
+    )
+
+
 def open_engine(path: Path) -> Engine:
     path.parent.mkdir(parents=True, exist_ok=True)
     engine = create_engine(URL.create("sqlite", database=str(path)), connect_args={"timeout": 10})
