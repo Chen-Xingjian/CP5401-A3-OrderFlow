@@ -144,16 +144,12 @@ def test_t25_cancel_races_start_production(service):
     )
 
 
-def test_t27_migrate_populated_v10_copy(tmp_path, monkeypatch):
+def test_t27_migrate_populated_v10_copy(tmp_path, monkeypatch, v10_migrations):
     original_path = tmp_path / "baseline.sqlite3"
     copy_path = tmp_path / "candidate.sqlite3"
-    old_migrations = tmp_path / "v10"
-    old_migrations.mkdir()
-    for name in ("001_baseline.sql", "002_account_passwords.sql"):
-        (old_migrations / name).write_bytes((db.MIGRATIONS / name).read_bytes())
     original = db.open_engine(original_path)
     with monkeypatch.context() as patch:
-        patch.setattr(db, "MIGRATIONS", old_migrations)
+        patch.setattr(db, "MIGRATIONS", v10_migrations)
         demo.prepare(original)
     legacy = OrderService(original)
     confirmed = at_stage(legacy, "CONFIRMED")

@@ -6,7 +6,7 @@ import streamlit as st
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from orderflow import demo
-from orderflow.db import database_path, open_engine
+from orderflow.db import database_path, migration_revision, open_engine
 from orderflow.models import OrderError, Principal
 from orderflow.rules import CANCELLABLE, NEXT_STATUS
 from orderflow.services import OrderService
@@ -37,7 +37,8 @@ SG = ZoneInfo("Asia/Singapore")
 
 
 @st.cache_resource
-def connect(path):
+def connect(path, schema_revision):
+    # Streamlit uses both arguments to decide when to prepare the database again.
     engine = open_engine(path)
     demo.prepare(engine)
     return engine
@@ -181,7 +182,7 @@ def main():
     st.title("OrderFlow")
     st.caption("Campus print shop · Demo workspace with fictional accounts")
     try:
-        service = OrderService(connect(database_path()))
+        service = OrderService(connect(database_path(), migration_revision()))
         role = st.radio(
             "Demo role",
             ["Customer", "Staff"],

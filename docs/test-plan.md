@@ -40,7 +40,7 @@ The current suite runs on temporary SQLite files. T15–T16 use a history trigge
 | T23–T24 | The service checks access before version or state. Cross-customer and missing-order results match. Old and current-version retries have distinct outcomes. Every attempted staff transition from Cancelled fails. |
 | T25 | Two connections read the same confirmed version before competing. Only one commits, and its actor and target match the last history event. |
 | T26 | A history-write trigger or a deferred constraint interrupts cancellation. A separate read sees the original confirmed order and both previous events. |
-| T27 | Upgrade a backup of a populated V1.0 file twice. Compare full snapshots for two owners, check foreign keys and the owner index, then progress a legacy order. |
+| T27 | Verify migrations 001 and 002 against their released V1.0 checksums. Upgrade a backup of a populated V1.0 file twice. Compare full snapshots for two owners, check foreign keys and the owner index, then progress a legacy order. With a warm Streamlit cache, cancel an existing order on the first attempt after upgrade and verify its history. |
 | T28 | Streamlit AppTest checks eligible and ineligible views, owner switching, cancelled history in the staff queue, and stale-page refresh feedback. |
 
 The original T19 migration inventory now includes the third checksum-tracked migration. The V1.0 test cases still run in the complete suite. The student's manual VAL-02 review is tracked separately in the R6 report.

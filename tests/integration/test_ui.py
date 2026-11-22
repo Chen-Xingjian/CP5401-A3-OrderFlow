@@ -4,8 +4,10 @@ import pytest
 from sqlalchemy import text
 from streamlit.testing.v1 import AppTest
 
+from orderflow import db
 from orderflow.auth import authenticate, password_record
 from orderflow.models import Principal
+from orderflow.services import OrderService
 
 APP = Path(__file__).resolve().parents[2] / "src/app.py"
 PASSWORD = "fictional-test-password"
@@ -126,8 +128,6 @@ def test_demo_preparation_preserves_existing_orders_and_inactive_accounts(review
 
 
 def test_sqlite_migration_preserves_existing_history(tmp_path, monkeypatch):
-    from orderflow import db
-    from orderflow.services import OrderService
     from support.sandbox import sandbox_database
 
     migrations = db.MIGRATIONS
@@ -186,3 +186,41 @@ def test_t28_stale_owner_page_requests_refresh(review_shop, service):
     assert app.subheader[0].value == "In production"
     assert not any(b.label == "Cancel order" for b in app.button)
     assert len(service.get_order(owner, order.id).history) == 3
+
+
+def test_t27_warm_upgrade_cancels_on_first_attempt(tmp_path, monkeypatch, v10_migrations):
+    path = tmp_path / "live.sqlite3"
+    monkeypatch.setenv("ORDERFLOW_DB_PATH", str(path))
+    # Keep the same entry point, database path, Streamlit session and resource cache.
+    with monkeypatch.context() as old:
+        old.setattr(db, "MIGRATIONS", v10_migrations)
+        app = start()
+        button(app, "Place order").click().run()
+        assert app.success[0].value == "Order placed."
+    engine = db.open_engine(path)
+    try:
+        owner = Principal("customer-a")
+        service = OrderService(engine)
+        (order,) = service.list_orders(owner)
+        before = service.get_order(owner, order.id)
+        with engine.connect() as conn:
+            assert conn.exec_driver_sql("SELECT count(*) FROM schema_migrations").scalar_one() == 2
+        app.run()
+        button(app, "Cancel order").click().run()
+        assert [message.value for message in app.success] == ["Order cancelled."]
+        after = service.get_order(owner, order.id)
+        assert after.history[:-1] == before.history
+        assert (after.order.status, after.order.version, after.history[-1].actor_id) == (
+            "CANCELLED",
+            order.version + 1,
+            "customer-a",
+        )
+        with engine.connect() as conn:
+            assert (
+                conn.exec_driver_sql(
+                    "SELECT count(*) FROM schema_migrations WHERE name='003_customer_cancellation.sql'"
+                ).scalar_one()
+                == 1
+            )
+    finally:
+        engine.dispose()
