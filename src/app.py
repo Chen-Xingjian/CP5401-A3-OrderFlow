@@ -12,6 +12,7 @@ from orderflow import demo
 from orderflow.db import database_path, migration_revision, open_engine
 from orderflow.models import OrderError, Principal
 from orderflow.rules import CANCELLABLE, NEXT_STATUS, pickup_is_overdue
+from orderflow.scenario import PickupScenario
 from orderflow.services import OrderService
 
 LABELS = {
@@ -259,7 +260,46 @@ def shared_shop():
     return OrderService(connect(database_path(), migration_revision()))
 
 
-def main(get_service=shared_shop):
+def switch_shop(role, user):
+    clear_workspace()
+    for key in list(st.session_state):
+        if key.startswith(("item_", "copies_", "note_")):
+            del st.session_state[key]
+    st.session_state["demo_role"] = role
+    st.session_state["demo_user"] = user
+    st.rerun()
+
+
+def scenario_service(*, include_shop=False):
+    scenario = st.session_state.get("pickup_scenario")
+    with st.container(border=True):
+        st.markdown("**Pickup demonstration**")
+        if scenario is None:
+            st.write("Start a private shop with two ready orders. One has waited 50 hours.")
+        else:
+            st.caption("Only this session uses these orders. Restart to create a fresh pair.")
+        if st.button("Start demo scenario" if scenario is None else "Restart demo scenario"):
+            try:
+                replacement = PickupScenario()
+            except (OSError, SQLAlchemyError, OrderError, RuntimeError):
+                st.error("Could not prepare the new scenario. Please try again.")
+                return scenario.service if scenario is not None else None
+            st.session_state["pickup_scenario"] = replacement
+            if scenario is not None:
+                scenario.close()
+            switch_shop("Staff", "staff-s")
+        if scenario is not None and include_shop and st.button("Return to shop"):
+            del st.session_state["pickup_scenario"]
+            scenario.close()
+            switch_shop("Customer", "customer-a")
+    return scenario.service if scenario is not None else None
+
+
+def combined_shop():
+    return scenario_service(include_shop=True) or shared_shop()
+
+
+def main(get_service=combined_shop):
     st.set_page_config(page_title="OrderFlow · Campus print shop", page_icon="📄", layout="wide")
     st.html(Path(__file__).with_name("workspace.css"))
     with st.container(key="masthead"):

@@ -94,3 +94,26 @@ def test_t32_failed_restart_preserves_scenario(tmp_path, monkeypatch):
     app.run()
     assert app.button(key="filter_READY_FOR_PICKUP").label == "Ready for pickup (2)"
     assert not shared.exists()
+
+
+def test_public_entry_switches_between_shared_shop_and_private_scenario(
+    database, service, monkeypatch
+):
+    monkeypatch.setenv("ORDERFLOW_DB_PATH", database.url.database)
+    alex = Principal("customer-a")
+    original = service.create_order(alex, service_id="bw-print", quantity=1)
+    before = service.get_order(alex, original.id)
+    app = AppTest.from_file(str(ENTRY.with_name("app.py"))).run()
+    assert app.selectbox(key="chosen").value == str(original.id)
+    click(app, "Start demo scenario")
+    assert app.selectbox(key="demo_user").value == "staff-s"
+    assert app.button(key="filter_READY_FOR_PICKUP").label == "Ready for pickup (2)"
+    app.button(key="filter_OVERDUE").click().run()
+    click(app, "Confirm handover")
+    assert app.button(key="filter_OVERDUE").label == "Pickup overdue (0)"
+    click(app, "Return to shop")
+    assert not app.exception
+    assert app.selectbox(key="demo_user").value == "customer-a"
+    assert app.selectbox(key="chosen").value == str(original.id)
+    assert service.get_order(alex, original.id) == before
+    assert "pickup_scenario" not in app.session_state
