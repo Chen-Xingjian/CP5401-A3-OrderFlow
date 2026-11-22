@@ -5,7 +5,7 @@ from sqlalchemy import text
 from streamlit.testing.v1 import AppTest
 
 from orderflow.auth import authenticate, password_record
-from orderflow.models import OrderError, Principal
+from orderflow.models import Principal
 
 APP = Path(__file__).resolve().parents[2] / "src/app.py"
 PASSWORD = "fictional-test-password"
@@ -13,17 +13,7 @@ PASSWORD = "fictional-test-password"
 
 @pytest.fixture
 def review_shop(database, monkeypatch):
-    with database.begin() as db:
-        schema = db.exec_driver_sql("SELECT current_schema()").scalar_one()
-        db.execute(
-            text("INSERT INTO account_passwords VALUES (:id,:salt,:digest)"),
-            [
-                {"id": uid, **password_record(PASSWORD)}
-                for uid in ["customer-a", "customer-b", "staff-s"]
-            ],
-        )
-    url = database.url.update_query_dict({"options": f"-c search_path={schema}"})
-    monkeypatch.setenv("DATABASE_URL", url.render_as_string(hide_password=False))
+    monkeypatch.setenv("ORDERFLOW_DB_PATH", database.url.database)
     return database
 
 
@@ -31,78 +21,111 @@ def button(app, label):
     return next(item for item in app.button if item.label == label)
 
 
-def login(app, username, password=PASSWORD):
-    app.text_input(key="login_name").set_value(username)
-    app.text_input(key="login_password").set_value(password)
-    button(app, "Sign in").click().run()
-    assert not app.exception
-
-
-def start(username):
+def start():
     app = AppTest.from_file(str(APP), default_timeout=15).run()
-    login(app, username)
+    assert not app.exception
     return app
 
 
-def test_t20_customer_order_and_shared_browser_switch(review_shop):
-    app = start("alex")
-    app.radio(key="page").set_value("Place an order").run()
-    app.number_input(key="copies").set_value(2)
-    app.text_area(key="note").set_value("Collect on Friday")
-    button(app, "Place order").click().run()
+def staff(app):
+    app.radio(key="demo_role").set_value("Staff").run()
     assert not app.exception
+    return app
+
+
+def choose(app, user_id):
+    app.selectbox(key="demo_user").set_value(user_id).run()
+    assert not app.exception
+
+
+def test_t20_customer_order_and_shared_browser_switch(review_shop):
+    app = start()
+    assert app.selectbox(key="demo_user").options == ["Alex", "Blair"]
+    assert not app.text_input
+    app.number_input(key="copies_customer-a").set_value(2)
+    app.text_area(key="note_customer-a").set_value("Collect on Friday")
+    button(app, "Place order").click().run()
     assert app.success[0].value == "Order placed."
     assert app.text[0].value == "Collect on Friday"
-    assert app.subheader[0].value == "Pending confirmation"
     assert all(item.label != "Confirm order" for item in app.button)
-    button(app, "Sign out").click().run()
-    assert not app.selectbox
-    login(app, "blair")
-    assert not app.text
-    assert not app.selectbox
+    app.text_area(key="note_customer-a").set_value("Alex draft")
+    choose(app, "customer-b")
+    assert not app.text and not app.success
+    assert app.text_area(key="note_customer-b").value == ""
+    assert app.number_input(key="copies_customer-b").value == 1
     assert app.info[0].value.startswith("Your orders will appear here")
+    choose(app, "customer-a")
+    assert app.text[0].value == "Collect on Friday"
 
 
 def test_t20_two_staff_sessions_and_handover(review_shop, service):
     customer = Principal("customer-a")
     order = service.create_order(customer, service_id="bw-print", quantity=2)
-    first, second = start("sam"), start("sam")
+    first, second = staff(start()), staff(start())
+    assert first.selectbox(key="demo_user").options == ["Sam", "Taylor"]
+    assert not first.text_area
+    choose(second, "staff-t")
     button(first, "Confirm order").click().run()
     button(second, "Confirm order").click().run()
-    assert not second.exception
     assert "Refresh" in second.error[0].value
     assert service.get_order(customer, order.id).order.version == 1
     for label in ["Start production", "Mark ready for pickup"]:
         button(first, label).click().run()
-    owner = start("alex")
-    assert owner.subheader[0].value == "Ready for pickup"
-    assert any("Collect them" in m.value for m in owner.markdown)
-    assert all(item.label != "Confirm handover" for item in owner.button)
-    button(first, "Confirm handover").click().run()
-    button(owner, "Refresh orders").click().run()
-    assert owner.subheader[0].value == "Completed"
+    first.radio(key="demo_role").set_value("Customer").run()
+    assert first.subheader[0].value == "Ready for pickup"
+    assert any("Collect them" in m.value for m in first.markdown)
     assert all(item.label != "Confirm handover" for item in first.button)
-    assert len(service.get_order(customer, order.id).history) == 5
+    staff(first)
+    choose(first, "staff-t")
+    button(first, "Confirm handover").click().run()
+    assert not first.exception
+    assert all(item.label != "Confirm handover" for item in first.button)
+    first.radio(key="demo_role").set_value("Customer").run()
+    assert first.subheader[0].value == "Completed"
+    history = service.get_order(customer, order.id).history
+    assert [event.actor_id for event in history] == [
+        "customer-a",
+        "staff-s",
+        "staff-s",
+        "staff-s",
+        "staff-t",
+    ]
 
 
-def test_t20_invalid_login_and_disabled_session(review_shop):
-    app = AppTest.from_file(str(APP), default_timeout=15).run()
-    for username in ["sam", "unknown"]:
-        login(app, username, "incorrect")
-        assert app.error[0].value == "Check your username and password."
-        assert not app.selectbox
-    login(app, "sam")
+def test_t20_inactive_and_non_demo_users(review_shop):
+    app = staff(start())
     with review_shop.begin() as db:
-        db.execute(text("UPDATE users SET active=false WHERE id='staff-s'"))
+        db.exec_driver_sql("UPDATE users SET active=false WHERE id='staff-s'")
+        db.exec_driver_sql(
+            "INSERT INTO users (id, username, role) VALUES ('other','other','STAFF')"
+        )
     button(app, "Refresh orders").click().run()
-    assert app.text_input(key="login_name")
+    assert not app.exception
+    assert app.selectbox(key="demo_user").options == ["Taylor"]
+    with review_shop.begin() as db:
+        db.execute(text("UPDATE users SET active=false WHERE id='staff-t'"))
+    button(app, "Refresh orders").click().run()
     assert not app.selectbox
-    with pytest.raises(OrderError) as error:
-        authenticate(review_shop, "sam", PASSWORD)
-    assert error.value.code == "INVALID_CREDENTIALS"
+    assert app.info[0].value == "No active demo users are available for this role."
 
 
-def test_upgrade_r2_order_with_history(tmp_path, monkeypatch):
+def test_demo_preparation_preserves_existing_orders_and_inactive_accounts(review_shop, service):
+    from orderflow import demo
+
+    owner = Principal("customer-a")
+    order = service.create_order(owner, service_id="bw-print", quantity=1)
+    snapshot = service.get_order(owner, order.id)
+    with review_shop.begin() as db:
+        db.exec_driver_sql("DELETE FROM users WHERE id='staff-t'")
+        db.exec_driver_sql("UPDATE users SET active=false WHERE id='customer-b'")
+    demo.prepare(review_shop)
+    demo.prepare(review_shop)
+    assert demo.choices(review_shop, "STAFF") == {"staff-s": "Sam", "staff-t": "Taylor"}
+    assert demo.choices(review_shop, "CUSTOMER") == {"customer-a": "Alex"}
+    assert service.get_order(owner, order.id) == snapshot
+
+
+def test_sqlite_migration_preserves_existing_history(tmp_path, monkeypatch):
     from orderflow import db
     from orderflow.services import OrderService
     from support.sandbox import sandbox_database

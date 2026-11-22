@@ -1,0 +1,139 @@
+No broken requirements found.
+All checks passed!
+31 files already formatted
+........................................................................ [ 77%]
+.....................                                                    [100%]
+==================================== PASSES ====================================
+___________________________ test_t10_full_lifecycle ____________________________
+----------------------------- Captured stdout call -----------------------------
+CONFIRMED | version=1 | history=2
+PROCESSING | version=2 | history=3
+READY_FOR_PICKUP | version=3 | history=4
+COMPLETED | version=4 | history=5
+__________ test_t15_t16_atomic_failure[before_history_insert-advance] __________
+----------------------------- Captured stdout call -----------------------------
+advance / before_history_insert | error=PERSISTENCE_ERROR | orders=1 | history=2 | state=CONFIRMED | version=1
+__________ test_t15_t16_atomic_failure[before_history_insert-create] ___________
+----------------------------- Captured stdout call -----------------------------
+create / before_history_insert | error=PERSISTENCE_ERROR | orders=1 | history=2 | state=CONFIRMED | version=1
+________________ test_t15_t16_atomic_failure[at_commit-advance] ________________
+----------------------------- Captured stdout call -----------------------------
+advance / at_commit | error=PERSISTENCE_ERROR | orders=1 | history=2 | state=CONFIRMED | version=1
+________________ test_t15_t16_atomic_failure[at_commit-create] _________________
+----------------------------- Captured stdout call -----------------------------
+create / at_commit | error=PERSISTENCE_ERROR | orders=1 | history=2 | state=CONFIRMED | version=1
+_____________________ test_t17_two_connections_one_commit ______________________
+----------------------------- Captured stdout call -----------------------------
+Workers={'staff-s': 'STALE_VERSION', 'staff-t': 'COMMITTED'} | status=PROCESSING | version=2 | history=3
+______________ test_t20_customer_order_and_shared_browser_switch _______________
+----------------------------- Captured stderr call -----------------------------
+2026-11-22 12:17:34.271 WARNING streamlit.runtime.scriptrunner_utils.script_run_context: Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call -------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:258 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+___________________ test_t20_two_staff_sessions_and_handover ___________________
+----------------------------- Captured stderr call -----------------------------
+2026-11-22 12:17:35.752 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-11-22 12:17:35.768 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call -------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:258 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:258 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+_____________________ test_t20_inactive_and_non_demo_users _____________________
+----------------------------- Captured stderr call -----------------------------
+2026-11-22 12:17:35.868 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call -------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:258 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+=========================== short test summary info ============================
+PASSED tests/integration/test_orders.py::test_t01_t09_creation_and_history
+PASSED tests/integration/test_orders.py::test_t02_accept_boundaries_in_db[1-]
+PASSED tests/integration/test_orders.py::test_t02_accept_boundaries_in_db[99-note1]
+PASSED tests/integration/test_orders.py::test_t02_t03_rejection_leaves_both_tables_empty[quantity-0]
+PASSED tests/integration/test_orders.py::test_t02_t03_rejection_leaves_both_tables_empty[quantity-100]
+PASSED tests/integration/test_orders.py::test_t02_t03_rejection_leaves_both_tables_empty[quantity-1.5]
+PASSED tests/integration/test_orders.py::test_t02_t03_rejection_leaves_both_tables_empty[quantity-True]
+PASSED tests/integration/test_orders.py::test_t02_t03_rejection_leaves_both_tables_empty[note-value4]
+PASSED tests/integration/test_orders.py::test_t02_t03_rejection_leaves_both_tables_empty[service_id-binding]
+PASSED tests/integration/test_orders.py::test_t02_t03_rejection_leaves_both_tables_empty[service_id-missing]
+PASSED tests/integration/test_orders.py::test_t02_t03_rejection_leaves_both_tables_empty[service_id-]
+PASSED tests/integration/test_orders.py::test_t02_t03_rejection_leaves_both_tables_empty[service_id-None]
+PASSED tests/integration/test_orders.py::test_t03_snapshot_from_catalogue
+PASSED tests/integration/test_orders.py::test_t04_t12_trusted_identity_fields
+PASSED tests/integration/test_orders.py::test_t05_t06_t07_scoped_lists_details_and_histories
+PASSED tests/integration/test_orders.py::test_t08_invalid_identity[None]
+PASSED tests/integration/test_orders.py::test_t08_invalid_identity[actor1]
+PASSED tests/integration/test_orders.py::test_t08_invalid_identity[actor2]
+PASSED tests/integration/test_orders.py::test_t08_invalid_identity[actor3]
+PASSED tests/integration/test_orders.py::test_t08_role_and_activation_rechecked_each_call
+PASSED tests/integration/test_orders.py::test_t10_full_lifecycle
+PASSED tests/integration/test_orders.py::test_t11_t13_rejected_transitions_preserve_every_field[0-PROCESSING]
+PASSED tests/integration/test_orders.py::test_t11_t13_rejected_transitions_preserve_every_field[1-COMPLETED]
+PASSED tests/integration/test_orders.py::test_t11_t13_rejected_transitions_preserve_every_field[1-PENDING]
+PASSED tests/integration/test_orders.py::test_t11_t13_rejected_transitions_preserve_every_field[1-CONFIRMED]
+PASSED tests/integration/test_orders.py::test_t11_t13_rejected_transitions_preserve_every_field[1-UNKNOWN]
+PASSED tests/integration/test_orders.py::test_t11_t13_rejected_transitions_preserve_every_field[4-CONFIRMED]
+PASSED tests/integration/test_orders.py::test_t14_replay_returns_refresh_before_edge_check
+PASSED tests/integration/test_orders.py::test_t18_orders_stay_independent
+PASSED tests/integration/test_orders.py::test_t19_reopen_database_and_rerun_migration
+PASSED tests/integration/test_orders.py::test_invalid_reference_and_version_preserve_order
+PASSED tests/integration/test_transactions.py::test_t15_t16_atomic_failure[before_history_insert-advance]
+PASSED tests/integration/test_transactions.py::test_t15_t16_atomic_failure[before_history_insert-create]
+PASSED tests/integration/test_transactions.py::test_t15_t16_atomic_failure[at_commit-advance]
+PASSED tests/integration/test_transactions.py::test_t15_t16_atomic_failure[at_commit-create]
+PASSED tests/integration/test_transactions.py::test_t17_two_connections_one_commit
+PASSED tests/integration/test_ui.py::test_t20_customer_order_and_shared_browser_switch
+PASSED tests/integration/test_ui.py::test_t20_two_staff_sessions_and_handover
+PASSED tests/integration/test_ui.py::test_t20_inactive_and_non_demo_users
+PASSED tests/integration/test_ui.py::test_demo_preparation_preserves_existing_orders_and_inactive_accounts
+PASSED tests/integration/test_ui.py::test_upgrade_r2_order_with_history
+PASSED tests/unit/test_rules.py::test_t02_accept_boundaries[-1]
+PASSED tests/unit/test_rules.py::test_t02_accept_boundaries[-99]
+PASSED tests/unit/test_rules.py::test_t02_accept_boundaries[note1-1]
+PASSED tests/unit/test_rules.py::test_t02_accept_boundaries[note1-99]
+PASSED tests/unit/test_rules.py::test_t02_reject_quantity[0]
+PASSED tests/unit/test_rules.py::test_t02_reject_quantity[100]
+PASSED tests/unit/test_rules.py::test_t02_reject_quantity[-1]
+PASSED tests/unit/test_rules.py::test_t02_reject_quantity[True]
+PASSED tests/unit/test_rules.py::test_t02_reject_quantity[False]
+PASSED tests/unit/test_rules.py::test_t02_reject_quantity[1.5]
+PASSED tests/unit/test_rules.py::test_t02_reject_quantity[None]
+PASSED tests/unit/test_rules.py::test_t02_reject_quantity[2]
+PASSED tests/unit/test_rules.py::test_t02_reject_note[note0]
+PASSED tests/unit/test_rules.py::test_t02_reject_note[1]
+PASSED tests/unit/test_rules.py::test_t02_reject_note[None]
+PASSED tests/unit/test_rules.py::test_t02_reject_note[broken\x00text]
+PASSED tests/unit/test_rules.py::test_t02_reject_note[\ud800]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PENDING-PENDING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PENDING-CONFIRMED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PENDING-PROCESSING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PENDING-READY_FOR_PICKUP]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PENDING-COMPLETED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PENDING-UNKNOWN]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[CONFIRMED-PENDING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[CONFIRMED-CONFIRMED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[CONFIRMED-PROCESSING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[CONFIRMED-READY_FOR_PICKUP]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[CONFIRMED-COMPLETED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[CONFIRMED-UNKNOWN]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PROCESSING-PENDING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PROCESSING-CONFIRMED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PROCESSING-PROCESSING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PROCESSING-READY_FOR_PICKUP]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PROCESSING-COMPLETED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[PROCESSING-UNKNOWN]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[READY_FOR_PICKUP-PENDING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[READY_FOR_PICKUP-CONFIRMED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[READY_FOR_PICKUP-PROCESSING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[READY_FOR_PICKUP-READY_FOR_PICKUP]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[READY_FOR_PICKUP-COMPLETED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[READY_FOR_PICKUP-UNKNOWN]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[COMPLETED-PENDING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[COMPLETED-CONFIRMED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[COMPLETED-PROCESSING]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[COMPLETED-READY_FOR_PICKUP]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[COMPLETED-COMPLETED]
+PASSED tests/unit/test_rules.py::test_t10_t11_t13_transition_matrix[COMPLETED-UNKNOWN]
+PASSED tests/unit/test_rules.py::test_invalid_version[None]
+PASSED tests/unit/test_rules.py::test_invalid_version[True]
+PASSED tests/unit/test_rules.py::test_invalid_version[-1]
+PASSED tests/unit/test_rules.py::test_invalid_version[0]
+PASSED tests/unit/test_rules.py::test_invalid_version[0.5]
+93 passed in 22.10s

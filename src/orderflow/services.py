@@ -43,7 +43,7 @@ class OrderService:
     def create_order(
         self, principal: Principal | None, *, service_id: str, quantity: int, note: str = ""
     ) -> Order:
-        with transaction(self.engine) as db:
+        with transaction(self.engine, write=True) as db:
             role = _role(db, principal)
             rules.validate_creation(service_id, quantity, note)
             _require_role(role, "CUSTOMER")
@@ -67,12 +67,12 @@ class OrderService:
     def advance_order(
         self, principal: Principal | None, order_id: UUID, *, target: str, expected_version: int
     ) -> Order:
-        with transaction(self.engine) as db:
+        with transaction(self.engine, write=True) as db:
             role = _role(db, principal)
             rules.validate_order_id(order_id)
             rules.validate_update(target, expected_version)
             _require_role(role, "STAFF")
-            current = repository.lock_order(db, order_id)
+            current = repository.current_order(db, order_id)
             if expected_version != current.version:
                 raise OrderError("STALE_VERSION", "This order changed. Refresh before continuing.")
             rules.check_transition(current.status, target)
