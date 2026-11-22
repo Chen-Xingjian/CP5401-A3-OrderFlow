@@ -34,7 +34,7 @@ python -m pip install -r requirements-dev.txt
 sh scripts/check.sh
 ```
 
-CI runs the same command on isolated, temporary SQLite files. Tests cover the order lifecycle, customer boundaries, stale staff updates, writer contention, rollback at commit, migration and single-page role switching.
+GitHub Actions runs these same checks on pushes to main, on pull requests and on manual runs. Open the **Run automated tests** step for the pytest results or download the JUnit report from the run summary. Tests use isolated, temporary SQLite files. Tests cover the order lifecycle, customer boundaries, stale staff updates, writer contention, rollback at commit, migration and single-page role switching.
 
 ## V1.1 release
 
