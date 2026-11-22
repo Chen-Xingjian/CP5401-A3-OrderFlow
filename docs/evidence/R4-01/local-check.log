@@ -1,6 +1,6 @@
 No broken requirements found.
 All checks passed!
-29 files already formatted
+31 files already formatted
 ........................................................................ [ 77%]
 .....................                                                    [100%]
 ==================================== PASSES ====================================
@@ -27,19 +27,19 @@ _____________________ test_t17_two_connections_one_commit ______________________
 Workers={'staff-s': 'STALE_VERSION', 'staff-t': 'COMMITTED'} | status=PROCESSING | version=2 | history=3
 ______________ test_t20_customer_order_and_shared_browser_switch _______________
 ----------------------------- Captured stderr call -----------------------------
-2026-11-22 12:14:34.996 WARNING streamlit.runtime.scriptrunner_utils.script_run_context: Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-11-22 12:17:34.271 WARNING streamlit.runtime.scriptrunner_utils.script_run_context: Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
 ------------------------------ Captured log call -------------------------------
 WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:258 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
 ___________________ test_t20_two_staff_sessions_and_handover ___________________
 ----------------------------- Captured stderr call -----------------------------
-2026-11-22 12:14:35.105 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
-2026-11-22 12:14:35.120 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-11-22 12:17:35.752 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-11-22 12:17:35.768 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
 ------------------------------ Captured log call -------------------------------
 WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:258 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
 WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:258 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
 _____________________ test_t20_inactive_and_non_demo_users _____________________
 ----------------------------- Captured stderr call -----------------------------
-2026-11-22 12:14:35.210 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-11-22 12:17:35.868 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
 ------------------------------ Captured log call -------------------------------
 WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:258 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
 =========================== short test summary info ============================
@@ -136,4 +136,4 @@ PASSED tests/unit/test_rules.py::test_invalid_version[True]
 PASSED tests/unit/test_rules.py::test_invalid_version[-1]
 PASSED tests/unit/test_rules.py::test_invalid_version[0]
 PASSED tests/unit/test_rules.py::test_invalid_version[0.5]
-93 passed in 17.57s
+93 passed in 22.10s

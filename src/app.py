@@ -43,7 +43,7 @@ def connect(url):
 
 
 def clear_workspace():
-    for key in ("actor", "chosen", "feedback", "item", "copies", "note"):
+    for key in ("actor", "chosen", "feedback"):
         st.session_state.pop(key, None)
 
 
@@ -56,20 +56,20 @@ def show_error(error):
     st.session_state["feedback"] = ("error", str(error))
 
 
-def new_order(service):
+def new_order(service, actor):
     try:
         order = service.create_order(
-            st.session_state.actor,
-            service_id=st.session_state.item,
-            quantity=st.session_state.copies,
-            note=st.session_state.note,
+            actor,
+            service_id=st.session_state[f"item_{actor.user_id}"],
+            quantity=st.session_state[f"copies_{actor.user_id}"],
+            note=st.session_state[f"note_{actor.user_id}"],
         )
     except OrderError as error:
         show_error(error)
         return
+    st.session_state.pop(f"note_{actor.user_id}", None)
+    st.session_state.pop(f"copies_{actor.user_id}", None)
     st.session_state["chosen"] = str(order.id)
-    st.session_state.pop("note", None)
-    st.session_state.pop("copies", None)
     st.session_state["feedback"] = ("success", "Order placed.")
 
 
@@ -97,11 +97,17 @@ def order_form(service, actor):
     if not options:
         st.info("The shop has no services available.")
         return
-    with st.form("new_order"):
-        st.selectbox("Print service", list(options), format_func=options.get, key="item")
-        st.number_input("Quantity", min_value=1, max_value=99, step=1, key="copies")
-        st.text_area("Print notes (optional)", max_chars=500, key="note")
-        st.form_submit_button("Place order", on_click=new_order, args=(service,), type="primary")
+    with st.form(f"new_order_{actor.user_id}"):
+        st.selectbox(
+            "Print service", list(options), format_func=options.get, key=f"item_{actor.user_id}"
+        )
+        st.number_input(
+            "Quantity", min_value=1, max_value=99, step=1, key=f"copies_{actor.user_id}"
+        )
+        st.text_area("Print notes (optional)", max_chars=500, key=f"note_{actor.user_id}")
+        st.form_submit_button(
+            "Place order", on_click=new_order, args=(service, actor), type="primary"
+        )
 
 
 def order_list(service, actor, staff):

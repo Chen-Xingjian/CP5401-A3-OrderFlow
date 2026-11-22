@@ -45,17 +45,17 @@ def test_t20_customer_order_and_shared_browser_switch(review_shop):
     app = start()
     assert app.selectbox(key="demo_user").options == ["Alex", "Blair"]
     assert not app.text_input
-    app.number_input(key="copies").set_value(2)
-    app.text_area(key="note").set_value("Collect on Friday")
+    app.number_input(key="copies_customer-a").set_value(2)
+    app.text_area(key="note_customer-a").set_value("Collect on Friday")
     button(app, "Place order").click().run()
     assert app.success[0].value == "Order placed."
     assert app.text[0].value == "Collect on Friday"
     assert all(item.label != "Confirm order" for item in app.button)
-    app.text_area(key="note").set_value("Alex draft")
+    app.text_area(key="note_customer-a").set_value("Alex draft")
     choose(app, "customer-b")
     assert not app.text and not app.success
-    assert app.text_area(key="note").value == ""
-    assert app.number_input(key="copies").value == 1
+    assert app.text_area(key="note_customer-b").value == ""
+    assert app.number_input(key="copies_customer-b").value == 1
     assert app.info[0].value.startswith("Your orders will appear here")
     choose(app, "customer-a")
     assert app.text[0].value == "Collect on Friday"
